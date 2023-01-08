@@ -31,7 +31,7 @@
 			 * Todo List:
 			 * double sided simulation (CZT)
 			 * connect tubes by ends with constrains (CZT)
-			 * function stopFoldThrough (LJX)
+			 * function stopFoldThrough, deflate and inflate simulation (LJX)
 			*/
 			
 			// Three.js variables for render
@@ -47,10 +47,11 @@
 			let constraints = []
 			
 			// Hinge motor velocity that determines speed and direction
+			const initialHingeVelocity = 0
 			const foldingVelocity = Math.PI / 4
-			// const foldingVelocity = 0
-			// const unfoldingVelocity = -Math.PI / 8
-			const foldingDuration = 1500
+			const foldingDuration = 1400
+			const unfoldingVelocity = -Math.PI / 8
+			const unFoldingDuration = 1000
 			
 			// Keep in sync the bodies with the visuals, thay always have the same length
 			let bodies = []
@@ -61,17 +62,12 @@
 			
 			initThree()
 			initCannon()
+
 			initDefaultMiuraTube()
 			// initFlatMiuraTube()
 			
 			connectTube()
 			animate()
-			
-			setTimeout(() => {
-				const velocity = 0
-				console.log('Stop the hinge motor')
-				constraints.forEach(hingeConstraint => hingeConstraint.setMotorSpeed(velocity))
-			}, foldingDuration)
 			
 			initGUI()
 			
@@ -86,15 +82,15 @@
 				console.log(tube1)
 				scene.add(tube1)
 				
-				let tube2 = addMiuraTube()
-				tube2.position.set(-50, 0, 0)
-				tube2.rotateZ( 90 * Math.PI / 180 )
-				scene.add(tube2)
+				// let tube2 = addMiuraTube()
+				// tube2.position.set(-50, 0, 0)
+				// tube2.rotateZ( 90 * Math.PI / 180 )
+				// scene.add(tube2)
 
-				let tube3 = addMiuraTube()
-				tube3.position.set(150, 0, 0)
-				tube3.rotateZ( 90 * Math.PI / 180 )
-				scene.add(tube3)
+				// let tube3 = addMiuraTube()
+				// tube3.position.set(150, 0, 0)
+				// tube3.rotateZ( 90 * Math.PI / 180 )
+				// scene.add(tube3)
 				
 				// console.log(visuals.length)
 			}
@@ -145,7 +141,7 @@
 				
 				const mass = 10
 				const intervalDistance = 12.954878 * 2
-
+				
 				for (let i = 0; i < unitNumber; i++) {
                     hingeBodiesArray[ i*4 ] = new CANNON.Body({
                         mass: mass,
@@ -268,7 +264,7 @@
 					})
 					
 					constraint.enableMotor()
-					constraint.setMotorSpeed( foldingVelocity )
+					constraint.setMotorSpeed( initialHingeVelocity )
 					world.addConstraint( constraint )
 				})
 			}
@@ -421,13 +417,33 @@
 				constraints.forEach( function( constraint ) {
 					constraint.equations.forEach(function( equation ) {
 						// set greater stiffness on the hinge
-						equation.setSpookParams( stiffness,relaxation,timeStep )
+						equation.setSpookParams( stiffness, relaxation, timeStep )
 					})
 					
 					constraint.enableMotor()
-					constraint.setMotorSpeed( foldingVelocity )
+					constraint.setMotorSpeed( initialHingeVelocity )
 					world.addConstraint( constraint )
 				})
+			}
+
+			function deflateTube() {
+				const velocity = foldingVelocity
+				constraints.forEach(hingeConstraint => hingeConstraint.setMotorSpeed(velocity))
+
+				setTimeout(() => {
+					const velocity = 0
+					constraints.forEach(hingeConstraint => hingeConstraint.setMotorSpeed(velocity))
+				}, foldingDuration)
+			}
+			
+			function inflateTube() {
+				const velocity = unfoldingVelocity
+				constraints.forEach(hingeConstraint => hingeConstraint.setMotorSpeed(velocity))
+				
+				setTimeout(() => {
+					const velocity = 0
+					constraints.forEach(hingeConstraint => hingeConstraint.setMotorSpeed(velocity))
+				}, unFoldingDuration)
 			}
 
 			function initCannon() {
