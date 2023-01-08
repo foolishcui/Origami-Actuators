@@ -1,0 +1,22 @@
+{
+  "dependencies": {
+    "cannon-es": "^0.20.0",
+    "three": "^0.147.0"
+  },
+  "name": "three",
+  "version": "0.147.0",
+  "type": "module",
+  "module": "./node_modules/three/build/three.module.js",
+  "three/addons/": "./node_modules/three/examples/jsm/",
+  "exports": {
+    ".": {
+      "import": "./node_modules/three/build/three.module.js",
+      "require": "./node_modules/three/build/three.cjs"
+    },
+    "./examples/fonts/*": "./node_modules/three/examples/fonts/*",
+    "./examples/jsm/*": "./node_modules/three/examples/jsm/*",
+    "./addons/*": "./node_modules/three/examples/jsm/*",
+    "./src/*": "./node_modules/three/src/*",
+    "./nodes": "./node_modules/three/examples/jsm/nodes/Nodes.js"
+  }
+}

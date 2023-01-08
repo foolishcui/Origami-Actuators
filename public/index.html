@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>Origami Actuators</title>
+		<!-- <link rel="stylesheet" href="css/style.css" type="text/css" /> -->
+		<style>
+			body { margin: 0; }
+		</style>
+	</head>
+	
+	<body>
+		<!-- <script src="../node_modules/three/build/three.min.js"></script> -->
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../node_modules/three/build/three.module.js",
+					"three/addons/": "../node_modules/three/examples/jsm/",
+					"cannon-es": "../node_modules/cannon-es/dist/cannon-es.js"
+				}
+			}
+		</script>
+		
+        <script type="module">
+			import * as THREE from 'three'
+			import * as CANNON from 'cannon-es'
+			import {GUI} from 'three/addons/libs/lil-gui.module.min.js'
+			import {OrbitControls} from 'three/addons/controls/OrbitControls.js'
+			
+			/**
+			 * Todo List:
+			 * double sided simulation (CZT)
+			 * connect tubes by ends with constrains (CZT)
+			 * function stopFoldThrough (LJX)
+			*/
+			
+			// Three.js variables for render
+			let renderer, camera, scene
+			let controls, gui
+			
+			// Cannon.js variables for physical simulation
+			let world
+			let useGravity = false
+			const unitNumber = 6	// a miura-ori tube has 6 units
+			let unit = new Array(4)	// a unit has four quadrilaterals
+            let hingeBodiesArray = new Array( unitNumber * unit.length )
+			let constraints = []
+			
+			// Hinge motor velocity that determines speed and direction
+			const foldingVelocity = Math.PI / 4
+			// const foldingVelocity = 0
+			// const unfoldingVelocity = -Math.PI / 8
+			const foldingDuration = 1500
+			
+			// Keep in sync the bodies with the visuals, thay always have the same length
+			let bodies = []
+			let visuals = []
+			
+			// User interaction variables
+			let tubeList = []
+			
+			initThree()
+			initCannon()
+			initDefaultMiuraTube()
+			// initFlatMiuraTube()
+			
+			connectTube()
+			animate()
+			
+			setTimeout(() => {
+				const velocity = 0
+				console.log('Stop the hinge motor')
+				constraints.forEach(hingeConstraint => hingeConstraint.setMotorSpeed(velocity))
+			}, foldingDuration)
+			
+			initGUI()
+			
+			function connectTube() {
+				/**
+				 * Manipulate tubes in the scene
+				 * Initiate physical bodies and constraints
+				 * Render phsycical body to Mesh
+				*/
+				let tube1 = addMiuraTube()
+				tube1.position.set(-20, 0, 0)
+				console.log(tube1)
+				scene.add(tube1)
+				
+				let tube2 = addMiuraTube()
+				tube2.position.set(-50, 0, 0)
+				tube2.rotateZ( 90 * Math.PI / 180 )
+				scene.add(tube2)
+
+				let tube3 = addMiuraTube()
+				tube3.position.set(150, 0, 0)
+				tube3.rotateZ( 90 * Math.PI / 180 )
+				scene.add(tube3)
+				
+				// console.log(visuals.length)
+			}
+
+			function addMiuraTube() {
+				/**
+				 * Add a new miura-ori tube as a three.js group
+				*/
+				const tube = new THREE.Group()
+				hingeBodiesArray.forEach( (body, i) => {
+					const meshes = bodyToMesh( body )
+					meshes.forEach( (mesh) => { tube.add( mesh ) } )
+				})
+				return tube
+			}
+			
+			function initDefaultMiuraTube() {
+				/**
+				 * Store vertices and indices for the geometry of miura-ori tube
+				 * Initiate the physical miura-ori tube with Trimesh shape
+				 * Specify hinge constraints with axis and pivot point
+				*/
+				const vertices_1 = new Float32Array([
+					0, 0, 0,
+					0, 12.173610, 8.763745,
+					-12.95488, -0.768048, 8.763745,
+					-12.954878, -12.941658, 0
+				])
+				const vertices_2 = new Float32Array([
+					0, 0, 0,
+					12.95488, -12.941658, 0,
+					12.954878, -0.768048, 8.763745,
+					0, 12.173610, 8.763745
+				])
+				const vertices_3 = new Float32Array([
+					0, 12.173610, 8.763745,
+					0, 24.347219, 0,
+					-12.954878, 11.405561, 0,
+					-12.954878, -0.768048, 8.763745
+				])
+				const vertices_4 = new Float32Array([
+					0, 12.173610, 8.763745,
+					12.954878, -0.768048, 8.763745,
+					12.954878, 11.405561, 0,
+					0, 24.347219, 0
+				])
+				const indices = new Uint16Array([0,1,2,0,2,3])
+				
+				const mass = 10
+				const intervalDistance = 12.954878 * 2
+
+				for (let i = 0; i < unitNumber; i++) {
+                    hingeBodiesArray[ i*4 ] = new CANNON.Body({
+                        mass: mass,
+                        type: CANNON.Body.DYNAMIC,
+                        shape: new CANNON.Trimesh( vertices_1, indices ),
+                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+				    })
+                    world.addBody( hingeBodiesArray[ i*4 ] )
+                    
+					hingeBodiesArray[ i*4+1 ] = new CANNON.Body({
+                        mass: mass,
+                        type: CANNON.Body.DYNAMIC,
+                        shape: new CANNON.Trimesh( vertices_2, indices ),
+                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+				    })
+                    world.addBody( hingeBodiesArray[ i*4+1 ] )
+                    
+					hingeBodiesArray[ i*4+2 ] = new CANNON.Body({  
+                        mass: mass,
+                        type: CANNON.Body.DYNAMIC,
+                        shape: new CANNON.Trimesh( vertices_3, indices ),
+                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+				    })
+                    world.addBody( hingeBodiesArray[ i*4+2 ] )
+                    
+					hingeBodiesArray[ i*4+3 ] = new CANNON.Body({  
+                        mass: mass,
+                        type: CANNON.Body.DYNAMIC,
+                        shape: new CANNON.Trimesh( vertices_4, indices ),
+                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+				    })
+                    world.addBody( hingeBodiesArray[ i*4+3 ] )
+                }
+				
+				// Specify a list of hinge constraints
+				for (let i = 0; i < unitNumber; i++) {
+					const axis1 = new CANNON.Vec3( 0, 0.811574, 0.58425 ) // vally hinge
+					constraints.push(
+						new CANNON.HingeConstraint(hingeBodiesArray[ i*4 ], hingeBodiesArray[ i*4+1 ], {
+							pivotA: new CANNON.Vec3( 0, 0, 0 ),
+							axisA: axis1,	
+							pivotB: new CANNON.Vec3( 0, 0, 0 ),
+							axisB: axis1,
+							collideConnected: true,
+							maxForce: Math.pow(10, 6)
+						})
+					)
+					
+					const axis2 = new CANNON.Vec3( 0.707468, 0.706746, 0 ) // mountain hinge
+					constraints.push(
+						new CANNON.HingeConstraint(hingeBodiesArray[ i*4 ], hingeBodiesArray[ i*4+2 ], {
+							pivotA: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
+							axisA: axis2,
+							pivotB: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
+							axisB: axis2,
+							collideConnected: true,
+							maxForce: Math.pow(10, 6)
+						})
+					)
+
+					const axis3 = new CANNON.Vec3( 0.707468, -0.706746, 0 )	// mountain hinge
+					constraints.push(
+						new CANNON.HingeConstraint(hingeBodiesArray[ i*4+1 ], hingeBodiesArray[ i*4+3 ], {
+							pivotA: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
+							axisA: axis3,
+							pivotB: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
+							axisB: axis3,
+							collideConnected: true,
+							maxForce: Math.pow(10, 6)
+						})
+					)
+
+					const axis4 = new CANNON.Vec3( 0, -0.811574, 0.58425 )	// mountain hinge
+					constraints.push(
+						new CANNON.HingeConstraint(hingeBodiesArray[ i*4+2 ], hingeBodiesArray[ i*4+3 ], {
+							pivotA: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
+							axisA: axis4,	
+							pivotB: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
+							axisB: axis4,	
+							collideConnected: true,
+							maxForce: Math.pow(10, 6)
+						})
+					)
+					
+					if ( i < unitNumber -1 ) {
+						const axis5 = new CANNON.Vec3( 0, -0.811574, -0.58425 )  // mountain hinge
+						constraints.push(
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*4+1 ], hingeBodiesArray[ (i+1)*4 ], {
+								pivotA: new CANNON.Vec3( 12.954878, -0.768048, 8.763745 ),
+								axisA: axis5, 
+								pivotB: new CANNON.Vec3( -12.954878, -0.768048, 8.763745 ),
+								axisB: axis5,
+								collideConnected: true,
+								maxForce: Math.pow(10, 6)
+							})
+						)
+						
+						const axis6 = new CANNON.Vec3( 0, 0.811574, -0.58425 )  // vally hinge
+						constraints.push(
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*4+3 ], hingeBodiesArray[ (i+1)*4+2 ], {
+								pivotA: new CANNON.Vec3( 12.954878, -0.768048, 8.763745 ),
+								axisA: axis6, 
+								pivotB: new CANNON.Vec3( -12.954878, -0.768048, 8.763745 ),
+								axisB: axis6, 
+								collideConnected: true,
+								maxForce: Math.pow(10, 6)
+							})
+						)
+					}
+				}
+				
+				const stiffness = 1e10
+				const relaxation = 4
+				const timeStep = 1/60
+				// add the constraints to the world and enable hinge motor
+				constraints.forEach( function( constraint ) {
+					constraint.equations.forEach(function( equation ) {
+						// set greater stiffness on the hinge
+						equation.setSpookParams( stiffness, relaxation, timeStep )
+					})
+					
+					constraint.enableMotor()
+					constraint.setMotorSpeed( foldingVelocity )
+					world.addConstraint( constraint )
+				})
+			}
+			
+			function initFlatMiuraTube() {
+				/**
+				 * Note that this function folds the tube from a flat surface
+				 * Store vertices and indices for the geometry of miura-ori tube
+				 * Initiate the physical miura-ori tube with Trimesh shape
+				 * Specify hinge constraints with axis and pivot point
+				*/
+				const vertices_1 = new Float32Array([
+					0, -15, 0,
+					0, 0, 0, 
+					-15.0, -10.503123, 0,
+					-15.0, -25.503113, 0
+				])
+				const vertices_2 = new Float32Array([
+					0, -15, 0,	
+					15.0, -25.503113, 0,
+					15.0, -10.503123, 0,
+					0, 0, 0
+				])
+				const vertices_3 = new Float32Array([
+					0, 0, 0,
+					0, 15.0, 0,
+					-15.0, 4.496877, 0,
+					-15.0, -10.503123, 0
+				])
+				const vertices_4 = new Float32Array([
+					0, 0, 0,
+					15.0, -10.503123, 0,
+					15.0, 4.496877, 0,
+					0, 15.0, 0
+				])
+				const indices = new Uint16Array([0,1,2,0,2,3])
+				
+				const mass = 10
+				const intervalDistance = 15.0 * 2
+
+				for (let i = 0; i < unitNumber; i++) {
+                    hingeBodiesArray[ i*4 ] = new CANNON.Body({
+                        mass: mass,
+                        type: CANNON.Body.DYNAMIC,
+                        shape: new CANNON.Trimesh( vertices_1, indices ),
+                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+				    })
+                    world.addBody( hingeBodiesArray[ i*4 ] )
+                    
+					hingeBodiesArray[ i*4+1 ] = new CANNON.Body({
+                        mass: mass,
+                        type: CANNON.Body.DYNAMIC,
+                        shape: new CANNON.Trimesh( vertices_2, indices ),
+                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+				    })
+                    world.addBody( hingeBodiesArray[ i*4+1 ] )
+                    
+					hingeBodiesArray[ i*4+2 ] = new CANNON.Body({  
+                        mass: mass,
+                        type: CANNON.Body.DYNAMIC,
+                        shape: new CANNON.Trimesh( vertices_3, indices ),
+                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+				    })
+                    world.addBody( hingeBodiesArray[ i*4+2 ] )
+                    
+					hingeBodiesArray[ i*4+3 ] = new CANNON.Body({  
+                        mass: mass,
+                        type: CANNON.Body.DYNAMIC,
+                        shape: new CANNON.Trimesh( vertices_4, indices ),
+                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+				    })
+                    world.addBody( hingeBodiesArray[ i*4+3 ] )
+                }
+				
+				// Specify a list of constraints
+				for (let i = 0; i < unitNumber; i++) {
+					constraints.push(
+						new CANNON.HingeConstraint(hingeBodiesArray[ i*4 ], hingeBodiesArray[ i*4+1 ], {
+							pivotA: new CANNON.Vec3(0, 0, 0),
+							axisA: new CANNON.Vec3(0, 1, 0), // vally hinge
+							pivotB: new CANNON.Vec3(0, 0, 0),
+							axisB: new CANNON.Vec3(0, 1, 0),
+							collideConnected: true,
+							maxForce: Math.pow(10, 6)
+						})
+					)
+
+					constraints.push(
+						new CANNON.HingeConstraint(hingeBodiesArray[ i*4 ], hingeBodiesArray[ i*4+2 ], {
+							pivotA: new CANNON.Vec3(0, 0, 0),
+							axisA: new CANNON.Vec3(0.819252, 0.573576, 0), // mountain hinge
+							pivotB: new CANNON.Vec3(0, 0, 0),
+							axisB: new CANNON.Vec3(0.819252, 0.573576, 0),
+							collideConnected: true,
+							maxForce: Math.pow(10, 6)
+						})
+					)
+
+					constraints.push(
+						new CANNON.HingeConstraint(hingeBodiesArray[ i*4+1 ], hingeBodiesArray[ i*4+3 ], {
+							pivotA: new CANNON.Vec3(0, 0, 0),
+							axisA: new CANNON.Vec3(0.819252, -0.573576, 0),	// mountain hinge
+							pivotB: new CANNON.Vec3(0, 0, 0),
+							axisB: new CANNON.Vec3(0.819252, -0.573576, 0),
+							collideConnected: true,
+							maxForce: Math.pow(10, 6)
+						})
+					)
+
+					constraints.push(
+						new CANNON.HingeConstraint(hingeBodiesArray[ i*4+2 ], hingeBodiesArray[ i*4+3 ], {
+							pivotA: new CANNON.Vec3(0, 0, 0),
+							axisA: new CANNON.Vec3(0,-1,0),	// mountain hinge
+							pivotB: new CANNON.Vec3(0, 0, 0),
+							axisB: new CANNON.Vec3(0,-1,0),
+							collideConnected: true,
+							maxForce: Math.pow(10, 6)
+						})
+					)
+					
+					if ( i < unitNumber -1 ) {
+						constraints.push(
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*4+1 ], hingeBodiesArray[ (i+1)*4 ], {
+								pivotA: new CANNON.Vec3(15, 0, 0),
+								axisA: new CANNON.Vec3(0, -1, 0), // mountain hinge
+								pivotB: new CANNON.Vec3(-15, 0, 0),
+								axisB: new CANNON.Vec3(0, -1, 0),
+								collideConnected: true,
+								maxForce: Math.pow(10, 6)
+							})
+						)
+
+						constraints.push(
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*4+3 ], hingeBodiesArray[ (i+1)*4+2 ], {
+								pivotA: new CANNON.Vec3(15, 0, 0),
+								axisA: new CANNON.Vec3(0, 1, 0), // vally hinge 
+								pivotB: new CANNON.Vec3(-15, 0, 0),
+								axisB: new CANNON.Vec3(0, 1, 0),
+								collideConnected: true,
+								maxForce: Math.pow(10, 6)
+							})
+						)
+					}
+				}
+				
+				const stiffness = 1e10
+				const relaxation = 4
+				const timeStep = 1/60
+				// add the constraints to the world and enable hinge motor
+				constraints.forEach( function( constraint ) {
+					constraint.equations.forEach(function( equation ) {
+						// set greater stiffness on the hinge
+						equation.setSpookParams( stiffness,relaxation,timeStep )
+					})
+					
+					constraint.enableMotor()
+					constraint.setMotorSpeed( foldingVelocity )
+					world.addConstraint( constraint )
+				})
+			}
+
+			function initCannon() {
+				world = new CANNON.World()
+				world.solver.iterations = 50
+				world.quatNormalizeFast = true
+				
+				// Set the gravity vector
+				if (useGravity == true) {
+					world.gravity.set(0, -9.82, 0)
+				}
+				
+				// Create a static ground
+				const groundBody = new CANNON.Body({
+					type: CANNON.Body.Static,
+					shape: new CANNON.Plane(),
+					material: new CANNON.Material('ground')
+				})
+				groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0)
+				groundBody.position.set(0, -30, 0)
+				world.addBody(groundBody)
+			}
+			
+			function bodyToMesh( body ) {
+				/**
+				 * Convert cannon bodies to three.js meshes directly
+				 * Body shape is Trimesh
+				*/
+				if ( !(body instanceof CANNON.Body) ) {
+					throw new Error('The argument passed to bodyToMesh() is not a body')
+				}
+
+				// Materials
+				const basicMaterial = new THREE.MeshBasicMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
+				const phongMaterial = new THREE.MeshPhongMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
+				const normalMaterial = new THREE.MeshNormalMaterial( {side: THREE.DoubleSide, wireframe: false} )
+				const material = normalMaterial
+				// const colors = new Float32Array()
+				
+				// Get the mesh of body
+				const meshes = body.shapes.map( (shape) => {
+					switch (shape.type) {
+						// check the shape type
+						case CANNON.Shape.types.TRIMESH: {
+							const verticeNum = shape.indices.length * 3
+							const v0 = new CANNON.Vec3()
+							const v1 = new CANNON.Vec3()
+							const v2 = new CANNON.Vec3()
+							
+							const geometry = new THREE.BufferGeometry()
+							const vertices = new Float32Array( verticeNum )
+							const indices = new Uint16Array( shape.indices.length )
+							let posNdx = 0
+							
+							for ( let i = 0; i < shape.indices.length / 3; i++ ) {
+								shape.getTriangleVertices( i, v0, v1, v2 )
+								
+								const positions = [v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z]
+								posNdx = posNdx + i * 3 * 3
+								vertices.set( positions, posNdx )
+								indices.set( [i*3, i*3+1, i*3+2], i * 3 )
+							}
+							// console.log(vertices)
+							// console.log(indices)
+							geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3) )
+							geometry.setIndex( new THREE.BufferAttribute(indices, 1) )
+							
+							geometry.computeBoundingSphere()
+							geometry.computeVertexNormals()
+								
+							return new THREE.Mesh(geometry, material)
+						}
+					}
+				})
+
+				// Multiple shapes in one body (compound body)
+				meshes.forEach( (mesh, i) => {
+					// console.log(mesh)
+					mesh.position.copy( body.shapeOffsets[i] )
+					mesh.quaternion.copy( body.shapeOrientations[i] )
+					// enable shadows on every object
+					mesh.receiveShadow = true
+    				mesh.castShadow = true
+					
+					bodies.push(body)
+					visuals.push(mesh)
+				})
+				return meshes
+			}
+			
+			function initThree() {
+				THREE.Object3D.DefaultUp = new THREE.Vector3( 0, 1, 0 )
+				
+				// Renderer
+				renderer = new THREE.WebGLRenderer( { antialias: true } )
+				renderer.setPixelRatio( window.devicePixelRatio )
+				renderer.setSize( window.innerWidth, window.innerHeight )
+				renderer.outputEncoding = THREE.sRGBEncoding
+				document.body.appendChild( renderer.domElement )
+				renderer.shadowMap.enabled = true
+    			renderer.shadowMap.type = THREE.PCFSoftShadowMap
+				
+				// Camera
+				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 )
+				camera.position.set( 0, 0, 200 )
+
+				// Scene
+				scene = new THREE.Scene()
+				scene.background = new THREE.Color( 'gray' )
+				
+				// Lights
+				scene.add( new THREE.AmbientLight( 0xFFFFFF, 0.1 ) )
+				const directionalLight = new THREE.DirectionalLight( 0xFFFFFF, 2 )
+				directionalLight.position.set( -30, 40, 30 )
+				directionalLight.target.position.set( 0, 0, 0 )
+				scene.add( directionalLight )
+
+				// Orbit controls
+				controls = new OrbitControls( camera, renderer.domElement )
+				window.addEventListener( 'resize', onWindowResize )
+				controls.rotateSpeed = 0.1
+				controls.zoomSpeed = 0.1
+				controls.enableDamping = true
+				controls.enablePan = true
+				controls.dampingFactor = 0.2
+				controls.minDistance = 10
+				controls.maxDistance = 500
+			}
+			
+			function animate() {
+				requestAnimationFrame( animate )
+				
+				// Step the physical simulation forward
+				world.fixedStep()
+				
+				// update the position and orientation of the mesh to match the CannonBody
+				for ( let i = 0; i < bodies.length; i++ ) {
+					const body = bodies[i]
+					const visual = visuals[i]
+
+					visual.position.copy( bodies[i].position )
+        			visual.quaternion.copy( bodies[i].quaternion )
+					
+					// mirror objects (position, rotation and scale) with a transformation matrix
+					// miuraTubeMeshMirror[i].applyMatrix4( new THREE.Matrix4().makeScale(1, -1, -1) )
+				}
+				
+				// render three.js objects
+				controls.update()
+				renderer.render( scene, camera )
+			}
+			
+			function stopFoldThrough() {
+				/**
+				 * stop two hinge bodies fold through each other
+				 * (1) set the limit of rigid folding
+				*/
+			}
+
+			function rotateBodies() {
+			  	/**
+				 * rotate cannon bodies
+				*/
+				// https://github.com/schteppe/cannon.js/issues/71
+			}
+
+			function onWindowResize() {
+				const width = window.innerWidth
+				const height = window.innerHeight
+				camera.aspect = width / height
+				camera.updateProjectionMatrix()
+				renderer.setSize( width, height )
+			}
+
+			function initGUI() {
+				/**
+				 * user interface & design workflow
+				*/
+				let data = {
+					x: 1
+				}
+				const gui = new GUI
+				gui.add(data, "x", -5, -1, 0.01).onChange(() => {
+					// geometry.attributes.position.array[3] = data.x
+					// geometry.attributes.position.needsUpdate = true
+				})
+				gui.open();
+			}
+			
+		</script>
+	</body>
+</html>
