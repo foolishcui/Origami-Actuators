@@ -43,12 +43,13 @@
 			const unitNumber = 6	// a miura-ori tube has 6 units
 			let unit = new Array(8)	// a unit has 8 quadrilaterals
             let hingeBodiesArray = new Array( unitNumber * unit.length )
+			let connectorTop, connectorEnd
 			let constraints = []
 			
 			// Hinge motor velocity that determines speed and direction
 			const initialHingeVelocity = 0
-			const foldingVelocity = Math.PI / 2
-			const foldingDuration = 600
+			const foldingVelocity = Math.PI / 4
+			const foldingDuration = 1000
 			const unfoldingVelocity = -Math.PI / 8
 			const unFoldingDuration = 1000
 			
@@ -64,10 +65,13 @@
 
 			initDefaultMiuraTube()
 			// initFlatMiuraTube()
+			initConnector()
 			
 			connectTube()
 			animate()
 			
+			// deflateTube()
+			// inflateTube()
 			initGUI()
 			
 			function connectTube() {
@@ -78,8 +82,12 @@
 				*/
 				let tube1 = addMiuraTube()
 				tube1.position.set(-20, 0, 0)
-				deflateTube()
+				
 				scene.add(tube1)
+
+				const aabb = new THREE.Box3()
+				aabb.setFromObject( tube1 )
+				console.log(aabb)
 				
 				// let tube2 = addMiuraTube()
 				// tube2.position.set(-50, 0, 0)
@@ -96,14 +104,43 @@
 			
 			function addMiuraTube() {
 				/**
-				 * Add a new miura-ori tube as a three.js group
+				 * Treat a new miura-ori tube as a three.js group
 				*/
 				const tube = new THREE.Group()
 				hingeBodiesArray.forEach( (body, i) => {
 					const meshes = bodyToMesh( body )
 					meshes.forEach( (mesh) => { tube.add( mesh ) } )
 				})
+				
+				// Add connectors to tube
+				tube.add( bodyToMesh(connectorTop)[0] )
+				tube.add( bodyToMesh(connectorEnd)[0] )
+				
 				return tube
+			}
+			
+			function initConnector() {
+				/**
+				 * Attach connectors to both ends of the tube
+				*/
+				connectorTop = new CANNON.Body({
+					mass: 1,
+					type: CANNON.Body.DYNAMIC,
+					shape: new CANNON.Sphere(10)
+				})
+				connectorTop.position.set(0,100,0)
+				world.addBody(connectorTop)
+				
+				connectorEnd = new CANNON.Body({
+					mass: 1,
+					type: CANNON.Body.DYNAMIC,
+					shape: new CANNON.Sphere(10)
+				})
+				connectorEnd.position.set(150,100,0)
+				world.addBody(connectorEnd)
+
+				// Add constraints between connectors and hinge bodies
+				// lock, conejoine
 			}
 			
 			function initDefaultMiuraTube() {
@@ -164,7 +201,7 @@
 				const indices = new Uint16Array([0,1,2,0,2,3])
 				
 				const unitFacesNum = 8	// the number of faces in a miura-ori unit
-				const mass = 10
+				const mass = 1
 				const intervalDistance = 12.954878 * 2
 				
 				// Initiatize hinge bodies with trimesh shape
@@ -641,15 +678,16 @@
 					shape: new CANNON.Plane(),
 					material: new CANNON.Material('ground')
 				})
-				groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0)
-				groundBody.position.set(0, -30, 0)
+				
+				// Visualization of the plane geometry is defined in initThree()
+				groundBody.quaternion.setFromEuler( -Math.PI / 2, 0, 0 )
+				groundBody.position.set( 0, -60, 0 )
 				world.addBody(groundBody)
 			}
 			
 			function bodyToMesh( body ) {
 				/**
 				 * Convert cannon bodies to three.js meshes directly
-				 * Body shape is Trimesh
 				*/
 				if ( !(body instanceof CANNON.Body) ) {
 					throw new Error('The argument passed to bodyToMesh() is not a body')
@@ -695,9 +733,14 @@
 								
 							return new THREE.Mesh(geometry, material)
 						}
+						
+						case CANNON.Shape.types.SPHERE: {
+							const geometry = new THREE.SphereGeometry( shape.radius )
+							return new THREE.Mesh(geometry, material)
+						}
 					}
 				})
-
+				
 				// Multiple shapes in one body (compound body)
 				meshes.forEach( (mesh, i) => {
 					// console.log(mesh)
@@ -725,13 +768,16 @@
 				renderer.shadowMap.enabled = true
     			renderer.shadowMap.type = THREE.PCFSoftShadowMap
 				
+				renderer.shadowMap.enabled = true
+        		renderer.shadowMap.type = THREE.PCFSoftShadowMap
+				
 				// Camera
 				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 )
-				camera.position.set( 0, 0, 200 )
+				camera.position.set( 50, 100, 250 )
 
 				// Scene
 				scene = new THREE.Scene()
-				scene.background = new THREE.Color( 'gray' )
+				scene.background = new THREE.Color( 'rgb(240, 240, 240)' )
 				
 				// Lights
 				scene.add( new THREE.AmbientLight( 0xFFFFFF, 0.1 ) )
@@ -739,7 +785,16 @@
 				directionalLight.position.set( -30, 40, 30 )
 				directionalLight.target.position.set( 0, 0, 0 )
 				scene.add( directionalLight )
-
+				
+				// Floor
+				const floorGeometry = new THREE.PlaneGeometry( 2000, 2000, 100, 100 )
+				floorGeometry.rotateX( -Math.PI / 2 )
+				const floorMaterial = new THREE.MeshLambertMaterial( { color: 0x787878 } )
+				const floor = new THREE.Mesh( floorGeometry, floorMaterial )
+				floor.position.set( 0, -60, 0 )
+				floor.receiveShadow = true
+				scene.add(floor)
+				
 				// Orbit controls
 				controls = new OrbitControls( camera, renderer.domElement )
 				window.addEventListener( 'resize', onWindowResize )
@@ -762,12 +817,8 @@
 				for ( let i = 0; i < bodies.length; i++ ) {
 					const body = bodies[i]
 					const visual = visuals[i]
-
 					visual.position.copy( bodies[i].position )
         			visual.quaternion.copy( bodies[i].quaternion )
-					
-					// mirror objects (position, rotation and scale) with a transformation matrix
-					// miuraTubeMeshMirror[i].applyMatrix4( new THREE.Matrix4().makeScale(1, -1, -1) )
 				}
 				
 				// render three.js objects
@@ -812,6 +863,11 @@
 				gui.open();
 			}
 			
+			// Mouse interactions
+			window.addEventListener( 'pointdown', (event) => {
+				// Fired when a pointer becomes active buttons state
+			})
+
 		</script>
 	</body>
 </html>
