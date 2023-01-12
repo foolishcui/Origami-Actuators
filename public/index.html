@@ -30,7 +30,7 @@
 			/**
 			 * Todo List:
 			 * 解决trimesh tube是否碰撞的问题
-			 * connect tubes by ends with constrains (CZT)
+			 * 解决多个tube连接添加连接件的问题, bounding box
 			 * function stopFoldThrough, deflate and inflate simulation (LJX)
 			*/
 			
@@ -41,7 +41,7 @@
 			// Cannon.js variables for physical simulation
 			let world
 			let useGravity = false
-			const unitNumber = 6	// a miura-ori tube has 6 units
+			const unitNumber = 4	// a miura-ori tube has 6 units
 			let unit = new Array(8)	// a unit has 8 quadrilaterals
 			let constraints = []
 			
@@ -78,17 +78,17 @@
 				 * Render phsycical body to Mesh
 				*/
 				var movingVec = new THREE.Vector3( 0, 0, 0 )
-				var quaternion = new THREE.Quaternion()
-				quaternion.setFromEuler( new THREE.Euler(0, Math.PI/2, 0 ) )
-				// quaternion.setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI/2 )
-				const tube1 = addMiuraTube( movingVec, quaternion )
+				var rotation = new THREE.Quaternion()
+				// rotation.setFromEuler( new THREE.Euler(0, Math.PI/2, 0 ) )
+				// rotation.setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI/2 )
+				const tube1 = addMiuraTube( movingVec, rotation )
 				scene.add(tube1)
 				
-				var movingVec = new THREE.Vector3( 20, 50, 0 )
-				var quaternion = new THREE.Quaternion()
-				quaternion.setFromEuler( new THREE.Euler(0, 0, Math.PI/2) )
-				const tube2 = addMiuraTube( movingVec, quaternion )
-				// tube2.rotateY( 30 * Math.PI / 180 )
+				var movingVec = new THREE.Vector3( -50, 50, -30 )
+				var rotation = new THREE.Quaternion()
+				rotation.setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI/4 )
+				const tube2 = addMiuraTube( movingVec, rotation )
+				// tube2.applyQuaternion(quaternion)
 				scene.add(tube2)
 				
 				// let tube3 = addMiuraTube()
@@ -99,41 +99,34 @@
 				// console.log(visuals.length)
 			}
 			
-			function addMiuraTube( movingVec, quaternion ) {
+			function addMiuraTube( position, quaternion ) {
 				/**
 				 * Treat a new miura-ori tube as a three.js group
 				 * Initiate a new physical tube with position and quaternion
 				*/
 				const tube = new THREE.Group()
 				
-				const hingeBodies = initDefaultMiuraTube()
-				const connectorBodies = initConnector( hingeBodies )
-				
+				const hingeBodies = initDefaultMiuraTube( position, quaternion )
 				hingeBodies.forEach( (body, i) => {
-					// Set the position and quaternion
-					const prevPos = body.position
-					const newPos = new CANNON.Vec3().copy( prevPos ).vadd( movingVec ) 
-					body.position.copy( newPos )
-					body.quaternion.mult( quaternion )
-					
 					// Visualize physical cannon bodies
 					const meshes = bodyToMesh( body )
 					meshes.forEach( (mesh) => { tube.add( mesh ) } )
 				})
 				
+				// const connectorBodies = initConnector( hingeBodies )
 				// Add connectors to the tube
-				connectorBodies.forEach( (body, i) => {
-					// Set the position and quaternion
-					const prevPos = body.position
-					const newPos = new CANNON.Vec3().copy( prevPos ).vadd( movingVec ) 
-					body.position.copy( newPos )
-					body.quaternion.mult( quaternion )
-
-					// Visualize physical cannon bodies
-					const meshes = bodyToMesh( body )
-					meshes.forEach( (mesh) => { tube.add( mesh ) } )
-				})
-
+				// connectorBodies.forEach( (body, i) => {
+				// 	// Set the position and quaternion
+				// 	const prevPos = body.position
+				// 	const newPos = new CANNON.Vec3().copy(prevPos).vadd(movingVec)
+				// 	body.position.copy(newPos)
+				// 	body.quaternion.mult(quaternion)
+					
+				// 	// Visualize physical cannon bodies
+				// 	const meshes = bodyToMesh( body )
+				// 	meshes.forEach( (mesh) => { tube.add( mesh ) } )
+				// })
+				
 				return tube
 			}
 			
@@ -145,14 +138,15 @@
 				
 				const sphereShape = new CANNON.Sphere(15)
 				const boxShape = new CANNON.Box(new CANNON.Vec3(10,10,10))
+				
 				connectorBodies[0] = new CANNON.Body({
 					mass: 0.1,
 					type: CANNON.Body.DYNAMIC,
 					shape: sphereShape
 				})
 				connectorBodies[0].position.set(-27,0,0)
-				connectorBodies[0].collisionFilterGroup = 0
-				connectorBodies[0].collisionFilterMask = 0
+				// connectorBodies[0].collisionFilterGroup = 0
+				// connectorBodies[0].collisionFilterMask = 0
 				world.addBody(connectorBodies[0])
 				
 				connectorBodies[1] = new CANNON.Body({
@@ -161,9 +155,18 @@
 					shape: sphereShape
 				})
 				connectorBodies[1].position.set(157,0,0)
-				connectorBodies[1].collisionFilterGroup = 0
-				connectorBodies[1].collisionFilterMask = 0
+				// connectorBodies[1].collisionFilterGroup = 0
+				// connectorBodies[1].collisionFilterMask = 0
 				world.addBody(connectorBodies[1])
+
+				console.log(connectorBodies[0].initPosition)
+				console.log(connectorBodies[1].initPosition)
+
+				console.log(hingeBodies[0].aabb)
+				console.log(hingeBodies[2].aabb)
+				console.log(hingeBodies[4].aabb)
+				console.log(hingeBodies[6].aabb)
+				
 				
 				// Add constraints between connectors and hinge bodies
 				world.addConstraint(new CANNON.LockConstraint( connectorBodies[0], hingeBodies[0] ))
@@ -180,14 +183,12 @@
 				return connectorBodies
 			}
 			
-			function initDefaultMiuraTube() {
+			function initDefaultMiuraTube( position, quaternion ) {
 				/**
 				 * Store vertices and indices for the body and geometry of the miura-ori tube
 				 * Initiate the physical miura-ori tube with Trimesh shape
 				 * Specify hinge constraints with axis and pivot point
-				*/
-				let hingeBodiesArray = new Array( unitNumber * unit.length )
-				
+				*/				
 				const faceVertices_1 = new Float32Array([
 					0, 0, 0,
 					0, 12.173610, 8.763745,
@@ -239,9 +240,19 @@
 				
 				const indices = new Uint16Array([0,1,2,0,2,3])
 				
-				const unitFacesNum = 8	// the number of faces in a miura-ori unit
+				// Number of faces in a miura-ori unit
+				let hingeBodiesArray = new Array( unitNumber * unit.length )
+				const unitFacesNum = 8
 				const mass = 1
+				
+				// Set the position and quaternion
 				const intervalDistance = 12.954878 * 2
+				const intervalVec = new CANNON.Vec3( intervalDistance, 0, 0 )   
+				const intervalQuat = new CANNON.Quaternion().copy( quaternion )	// Rotate the intervalVec
+				intervalQuat.vmult( intervalVec, intervalVec )
+				
+				// Whether to add hinge constraints (for test)
+				const useHingeConstraints = false
 				
 				// Initiatize hinge bodies with shape
 				for ( let i = 0; i < unitNumber; i++ ) {
@@ -249,7 +260,8 @@
                         mass: mass,
                         type: CANNON.Body.DYNAMIC,
                         shape: new CANNON.Trimesh( faceVertices_1, indices ),
-                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+						position: intervalVec.scale(i).vadd( position ),
+						quaternion: intervalQuat
 				    })
                     world.addBody( hingeBodiesArray[ i*unitFacesNum ] )
                     
@@ -257,7 +269,8 @@
                         mass: mass,
                         type: CANNON.Body.DYNAMIC,
                         shape: new CANNON.Trimesh( faceVertices_2, indices ),
-                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+						position: intervalVec.scale(i).vadd( position ),
+						quaternion: intervalQuat
 				    })
                     world.addBody( hingeBodiesArray[ i*unitFacesNum+1 ] )
                     
@@ -265,7 +278,8 @@
                         mass: mass,
                         type: CANNON.Body.DYNAMIC,
                         shape: new CANNON.Trimesh( faceVertices_3, indices ),
-                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+						position: intervalVec.scale(i).vadd( position ),
+						quaternion: intervalQuat
 				    })
                     world.addBody( hingeBodiesArray[ i*unitFacesNum+2 ] )
                     
@@ -273,7 +287,8 @@
                         mass: mass,
                         type: CANNON.Body.DYNAMIC,
                         shape: new CANNON.Trimesh( faceVertices_4, indices ),
-                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+						position: intervalVec.scale(i).vadd( position ),
+						quaternion: intervalQuat
 				    })
                     world.addBody( hingeBodiesArray[ i*unitFacesNum+3 ] )
 
@@ -281,7 +296,8 @@
 						mass: mass,
                         type: CANNON.Body.DYNAMIC,
                         shape: new CANNON.Trimesh( faceVertices_5, indices ),
-                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+						position: intervalVec.scale(i).vadd( position ),
+						quaternion: intervalQuat
 					})
 					world.addBody( hingeBodiesArray[ i*unitFacesNum+4 ] )
 					
@@ -289,7 +305,8 @@
 						mass: mass,
                         type: CANNON.Body.DYNAMIC,
                         shape: new CANNON.Trimesh( faceVertices_6, indices ),
-                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+						position: intervalVec.scale(i).vadd( position ),
+						quaternion: intervalQuat
 					})
 					world.addBody( hingeBodiesArray[ i*unitFacesNum+5 ] )
 
@@ -297,7 +314,8 @@
 						mass: mass,
                         type: CANNON.Body.DYNAMIC,
                         shape: new CANNON.Trimesh( faceVertices_7, indices ),
-                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+						position: intervalVec.scale(i).vadd( position ),
+						quaternion: intervalQuat
 					})
 					world.addBody( hingeBodiesArray[ i*unitFacesNum+6 ] )
 					
@@ -305,209 +323,212 @@
 						mass: mass,
                         type: CANNON.Body.DYNAMIC,
                         shape: new CANNON.Trimesh( faceVertices_8, indices ),
-                        position: new CANNON.Vec3( intervalDistance * i, 0, 0 )
+						position: intervalVec.scale(i).vadd( position ),
+						quaternion: intervalQuat
 					})
 					world.addBody( hingeBodiesArray[ i*unitFacesNum+7 ] )
                 }
-
+				
 				// Specify a list of hinge constraints
-				for ( let i = 0; i < unitNumber; i++ ) {
-					const axis1 = new CANNON.Vec3( 0, 0.811574, 0.58425 ) // vally hinge
-					constraints.push(
-						new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum ], hingeBodiesArray[ i*unitFacesNum+1 ], {
-							pivotA: new CANNON.Vec3( 0, 0, 0 ),
-							axisA: axis1,	
-							pivotB: new CANNON.Vec3( 0, 0, 0 ),
-							axisB: axis1,
-							collideConnected: true,
-							maxForce: Math.pow(10, 6)
-						})
-					)
-					
-					const axis2 = new CANNON.Vec3( 0.707468, 0.706746, 0 ) // mountain hinge
-					constraints.push(
-						new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum ], hingeBodiesArray[ i*unitFacesNum+2 ], {
-							pivotA: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
-							axisA: axis2,
-							pivotB: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
-							axisB: axis2,
-							collideConnected: true,
-							maxForce: Math.pow(10, 6)
-						})
-					)
-					
-					const axis3 = new CANNON.Vec3( 0.707468, -0.706746, 0 )	// mountain hinge
-					constraints.push(
-						new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+1 ], hingeBodiesArray[ i*unitFacesNum+3 ], {
-							pivotA: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
-							axisA: axis3,
-							pivotB: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
-							axisB: axis3,
-							collideConnected: true,
-							maxForce: Math.pow(10, 6)
-						})
-					)
-					
-					const axis4 = new CANNON.Vec3( 0, -0.811574, 0.58425 )	// mountain hinge
-					constraints.push(
-						new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+2 ], hingeBodiesArray[ i*unitFacesNum+3 ], {
-							pivotA: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
-							axisA: axis4,	
-							pivotB: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
-							axisB: axis4,	
-							collideConnected: true,
-							maxForce: Math.pow(10, 6)
-						})
-					)
-					
-					const axis5 = new CANNON.Vec3( 0, -0.811574, 0.58425 ) // vally hinge
-					constraints.push(
-						new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+4 ], hingeBodiesArray[ i*unitFacesNum+5 ], {
-							pivotA: new CANNON.Vec3( 0, 0, 0 ),
-							axisA: axis5,	
-							pivotB: new CANNON.Vec3( 0, 0, 0 ),
-							axisB: axis5,
-							collideConnected: true,
-							maxForce: Math.pow(10, 6)
-						})
-					)
-					
-					const axis6 = new CANNON.Vec3( -0.707468, -0.706746, 0 ) // mountain hinge
-					constraints.push(
-						new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+4 ], hingeBodiesArray[ i*unitFacesNum+6 ], {
-							pivotA: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
-							axisA: axis6,
-							pivotB: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
-							axisB: axis6,
-							collideConnected: true,
-							maxForce: Math.pow(10, 6)
-						})
-					)
-					
-					const axis7 = new CANNON.Vec3( -0.707468, 0.706746, 0 )	// mountain hinge
-					constraints.push(
-						new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+5 ], hingeBodiesArray[ i*unitFacesNum+7 ], {
-							pivotA: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
-							axisA: axis7,
-							pivotB: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
-							axisB: axis7,
-							collideConnected: true,
-							maxForce: Math.pow(10, 6)
-						})
-					)
-					
-					const axis8 = new CANNON.Vec3( 0, 0.811574, 0.58425 )	// mountain hinge
-					constraints.push(
-						new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+6 ], hingeBodiesArray[ i*unitFacesNum+7 ], {
-							pivotA: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
-							axisA: axis8,	
-							pivotB: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
-							axisB: axis8,	
-							collideConnected: true,
-							maxForce: Math.pow(10, 6)
-						})
-					)
-					
-					const axis9 = new CANNON.Vec3( 0.707468, 0.706746, 0 ) // vally hinge
-					constraints.push(
-						new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum ], hingeBodiesArray[ i*unitFacesNum+4 ], {
-							pivotA: new CANNON.Vec3( 0, 0, 0 ),
-							axisA: axis9,
-							pivotB: new CANNON.Vec3( 0, 0, 0 ),
-							axisB: axis9,
-							collideConnected: true,
-							maxForce: Math.pow(10, 6)
-						})
-					)
-					
-					const axis10 = new CANNON.Vec3( 0.707468, -0.706746, 0 ) // vally hinge
-					constraints.push(
-						new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+1 ], hingeBodiesArray[ i*unitFacesNum+5 ], {
-							pivotA: new CANNON.Vec3( 0, 0, 0 ),
-							axisA: axis10,
-							pivotB: new CANNON.Vec3( 0, 0, 0 ),
-							axisB: axis10,
-							collideConnected: true,
-							maxForce: Math.pow(10, 6)
-						})
-					)
-					
-					const axis11 = new CANNON.Vec3( -0.707468, -0.706746, 0 ) // vally hinge
-					constraints.push(
-						new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+2 ], hingeBodiesArray[ i*unitFacesNum+6 ], {
-							pivotA: new CANNON.Vec3( 0, 24.347219, 0 ),
-							axisA: axis11,
-							pivotB: new CANNON.Vec3( 0, 24.347219, 0 ),
-							axisB: axis11,
-							collideConnected: true,
-							maxForce: Math.pow(10, 6)
-						})
-					)
-					
-					const axis12 = new CANNON.Vec3( -0.707468, 0.706746, 0 ) // vally hinge
-					constraints.push(
-						new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+3 ], hingeBodiesArray[ i*unitFacesNum+7 ], {
-							pivotA: new CANNON.Vec3( 0, 24.347219, 0 ),
-							axisA: axis12,
-							pivotB: new CANNON.Vec3( 0, 24.347219, 0 ),
-							axisB: axis12,
-							collideConnected: true,
-							maxForce: Math.pow(10, 6)
-						})
-					)
-					
-					// Specify hinge constraints to connect multiple units
-					if ( i < unitNumber -1 ) {
-						const axis13 = new CANNON.Vec3( 0, -0.811574, -0.58425 )  // mountain hinge
+				if (useHingeConstraints) {
+					for ( let i = 0; i < unitNumber; i++ ) {
+						const axis1 = new CANNON.Vec3( 0, 0.811574, 0.58425 ) // vally hinge
 						constraints.push(
-							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+1 ], hingeBodiesArray[ (i+1)*unitFacesNum ], {
-								pivotA: new CANNON.Vec3( 12.954878, -0.768048, 8.763745 ),
-								axisA: axis13,
-								pivotB: new CANNON.Vec3( -12.954878, -0.768048, 8.763745 ),
-								axisB: axis13,
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum ], hingeBodiesArray[ i*unitFacesNum+1 ], {
+								pivotA: new CANNON.Vec3( 0, 0, 0 ),
+								axisA: axis1,	
+								pivotB: new CANNON.Vec3( 0, 0, 0 ),
+								axisB: axis1,
 								collideConnected: true,
 								maxForce: Math.pow(10, 6)
 							})
 						)
 						
-						const axis14 = new CANNON.Vec3( 0, 0.811574, -0.58425 )  // vally hinge
+						const axis2 = new CANNON.Vec3( 0.707468, 0.706746, 0 ) // mountain hinge
 						constraints.push(
-							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+3 ], hingeBodiesArray[ (i+1)*unitFacesNum+2 ], {
-								pivotA: new CANNON.Vec3( 12.954878, -0.768048, 8.763745 ),
-								axisA: axis14,
-								pivotB: new CANNON.Vec3( -12.954878, -0.768048, 8.763745 ),
-								axisB: axis14,
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum ], hingeBodiesArray[ i*unitFacesNum+2 ], {
+								pivotA: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
+								axisA: axis2,
+								pivotB: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
+								axisB: axis2,
 								collideConnected: true,
 								maxForce: Math.pow(10, 6)
 							})
 						)
 						
-						const axis15 = new CANNON.Vec3( 0, 0.811574, -0.58425 )  // mountain hinge
+						const axis3 = new CANNON.Vec3( 0.707468, -0.706746, 0 )	// mountain hinge
 						constraints.push(
-							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+5 ], hingeBodiesArray[ (i+1)*unitFacesNum+4 ], {
-								pivotA: new CANNON.Vec3( 12.954878, -0.768048, -8.763745 ),
-								axisA: axis15,
-								pivotB: new CANNON.Vec3( -12.954878, -0.768048, -8.763745 ),
-								axisB: axis15,
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+1 ], hingeBodiesArray[ i*unitFacesNum+3 ], {
+								pivotA: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
+								axisA: axis3,
+								pivotB: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
+								axisB: axis3,
 								collideConnected: true,
 								maxForce: Math.pow(10, 6)
 							})
 						)
 						
-						const axis16 = new CANNON.Vec3( 0, -0.811574, -0.58425 )  // vally hinge
+						const axis4 = new CANNON.Vec3( 0, -0.811574, 0.58425 )	// mountain hinge
 						constraints.push(
-							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+7], hingeBodiesArray[ (i+1)*unitFacesNum+6 ], {
-								pivotA: new CANNON.Vec3( 12.954878, -0.768048, -8.763745 ),
-								axisA: axis16,
-								pivotB: new CANNON.Vec3( -12.954878, -0.768048, -8.763745 ),
-								axisB: axis16,
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+2 ], hingeBodiesArray[ i*unitFacesNum+3 ], {
+								pivotA: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
+								axisA: axis4,	
+								pivotB: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
+								axisB: axis4,	
 								collideConnected: true,
 								maxForce: Math.pow(10, 6)
 							})
 						)
+						
+						const axis5 = new CANNON.Vec3( 0, -0.811574, 0.58425 ) // vally hinge
+						constraints.push(
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+4 ], hingeBodiesArray[ i*unitFacesNum+5 ], {
+								pivotA: new CANNON.Vec3( 0, 0, 0 ),
+								axisA: axis5,	
+								pivotB: new CANNON.Vec3( 0, 0, 0 ),
+								axisB: axis5,
+								collideConnected: true,
+								maxForce: Math.pow(10, 6)
+							})
+						)
+						
+						const axis6 = new CANNON.Vec3( -0.707468, -0.706746, 0 ) // mountain hinge
+						constraints.push(
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+4 ], hingeBodiesArray[ i*unitFacesNum+6 ], {
+								pivotA: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
+								axisA: axis6,
+								pivotB: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
+								axisB: axis6,
+								collideConnected: true,
+								maxForce: Math.pow(10, 6)
+							})
+						)
+						
+						const axis7 = new CANNON.Vec3( -0.707468, 0.706746, 0 )	// mountain hinge
+						constraints.push(
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+5 ], hingeBodiesArray[ i*unitFacesNum+7 ], {
+								pivotA: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
+								axisA: axis7,
+								pivotB: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
+								axisB: axis7,
+								collideConnected: true,
+								maxForce: Math.pow(10, 6)
+							})
+						)
+						
+						const axis8 = new CANNON.Vec3( 0, 0.811574, 0.58425 )	// mountain hinge
+						constraints.push(
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+6 ], hingeBodiesArray[ i*unitFacesNum+7 ], {
+								pivotA: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
+								axisA: axis8,	
+								pivotB: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
+								axisB: axis8,	
+								collideConnected: true,
+								maxForce: Math.pow(10, 6)
+							})
+						)
+						
+						const axis9 = new CANNON.Vec3( 0.707468, 0.706746, 0 ) // vally hinge
+						constraints.push(
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum ], hingeBodiesArray[ i*unitFacesNum+4 ], {
+								pivotA: new CANNON.Vec3( 0, 0, 0 ),
+								axisA: axis9,
+								pivotB: new CANNON.Vec3( 0, 0, 0 ),
+								axisB: axis9,
+								collideConnected: true,
+								maxForce: Math.pow(10, 6)
+							})
+						)
+						
+						const axis10 = new CANNON.Vec3( 0.707468, -0.706746, 0 ) // vally hinge
+						constraints.push(
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+1 ], hingeBodiesArray[ i*unitFacesNum+5 ], {
+								pivotA: new CANNON.Vec3( 0, 0, 0 ),
+								axisA: axis10,
+								pivotB: new CANNON.Vec3( 0, 0, 0 ),
+								axisB: axis10,
+								collideConnected: true,
+								maxForce: Math.pow(10, 6)
+							})
+						)
+						
+						const axis11 = new CANNON.Vec3( -0.707468, -0.706746, 0 ) // vally hinge
+						constraints.push(
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+2 ], hingeBodiesArray[ i*unitFacesNum+6 ], {
+								pivotA: new CANNON.Vec3( 0, 24.347219, 0 ),
+								axisA: axis11,
+								pivotB: new CANNON.Vec3( 0, 24.347219, 0 ),
+								axisB: axis11,
+								collideConnected: true,
+								maxForce: Math.pow(10, 6)
+							})
+						)
+						
+						const axis12 = new CANNON.Vec3( -0.707468, 0.706746, 0 ) // vally hinge
+						constraints.push(
+							new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+3 ], hingeBodiesArray[ i*unitFacesNum+7 ], {
+								pivotA: new CANNON.Vec3( 0, 24.347219, 0 ),
+								axisA: axis12,
+								pivotB: new CANNON.Vec3( 0, 24.347219, 0 ),
+								axisB: axis12,
+								collideConnected: true,
+								maxForce: Math.pow(10, 6)
+							})
+						)
+						
+						// Specify hinge constraints to connect multiple units
+						if ( i < unitNumber -1 ) {
+							const axis13 = new CANNON.Vec3( 0, -0.811574, -0.58425 )  // mountain hinge
+							constraints.push(
+								new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+1 ], hingeBodiesArray[ (i+1)*unitFacesNum ], {
+									pivotA: new CANNON.Vec3( 12.954878, -0.768048, 8.763745 ),
+									axisA: axis13,
+									pivotB: new CANNON.Vec3( -12.954878, -0.768048, 8.763745 ),
+									axisB: axis13,
+									collideConnected: true,
+									maxForce: Math.pow(10, 6)
+								})
+							)
+							
+							const axis14 = new CANNON.Vec3( 0, 0.811574, -0.58425 )  // vally hinge
+							constraints.push(
+								new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+3 ], hingeBodiesArray[ (i+1)*unitFacesNum+2 ], {
+									pivotA: new CANNON.Vec3( 12.954878, -0.768048, 8.763745 ),
+									axisA: axis14,
+									pivotB: new CANNON.Vec3( -12.954878, -0.768048, 8.763745 ),
+									axisB: axis14,
+									collideConnected: true,
+									maxForce: Math.pow(10, 6)
+								})
+							)
+							
+							const axis15 = new CANNON.Vec3( 0, 0.811574, -0.58425 )  // mountain hinge
+							constraints.push(
+								new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+5 ], hingeBodiesArray[ (i+1)*unitFacesNum+4 ], {
+									pivotA: new CANNON.Vec3( 12.954878, -0.768048, -8.763745 ),
+									axisA: axis15,
+									pivotB: new CANNON.Vec3( -12.954878, -0.768048, -8.763745 ),
+									axisB: axis15,
+									collideConnected: true,
+									maxForce: Math.pow(10, 6)
+								})
+							)
+							
+							const axis16 = new CANNON.Vec3( 0, -0.811574, -0.58425 )  // vally hinge
+							constraints.push(
+								new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+7], hingeBodiesArray[ (i+1)*unitFacesNum+6 ], {
+									pivotA: new CANNON.Vec3( 12.954878, -0.768048, -8.763745 ),
+									axisA: axis16,
+									pivotB: new CANNON.Vec3( -12.954878, -0.768048, -8.763745 ),
+									axisB: axis16,
+									collideConnected: true,
+									maxForce: Math.pow(10, 6)
+								})
+							)
+						}
 					}
 				}
-				
+
 				const stiffness = 1e10
 				const relaxation = 4
 				const timeStep = 1/60
@@ -820,7 +841,7 @@
 				
 				// Camera
 				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 )
-				camera.position.set( 50, 100, 250 )
+				camera.position.set( 0, 0, 250 )
 
 				// Scene
 				scene = new THREE.Scene()
