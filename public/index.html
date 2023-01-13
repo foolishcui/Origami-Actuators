@@ -29,8 +29,8 @@
 			
 			/**
 			 * Todo List:
-			 * 解决trimesh tube是否碰撞的问题
-			 * 解决多个tube连接添加连接件的问题, bounding box
+			 * 解决trimesh faces 碰撞的问题，尝试转化为convex
+			 * 解决多个tube连接添加连接件的问题, 使用bounding box
 			 * function stopFoldThrough, deflate and inflate simulation (LJX)
 			*/
 			
@@ -41,14 +41,14 @@
 			// Cannon.js variables for physical simulation
 			let world
 			let useGravity = false
-			const unitNumber = 4	// a miura-ori tube has 6 units
+			const unitNumber = 6	// a miura-ori tube has 6 units
 			let unit = new Array(8)	// a unit has 8 quadrilaterals
 			let constraints = []
 			
 			// Hinge motor velocity that determines speed and direction
 			const initialHingeVelocity = 0
 			const foldingVelocity = Math.PI / 4
-			const foldingDuration = 1000
+			const foldingDuration = 1200
 			const unfoldingVelocity = -Math.PI / 8
 			const unFoldingDuration = 1000
 			
@@ -62,13 +62,12 @@
 			initThree()
 			initCannon()
 			
-			// initFlatMiuraTube()
-			
 			connectTube()
 			animate()
 			
 			deflateTube()
 			// inflateTube()
+			
 			initGUI()
 			
 			function connectTube() {
@@ -87,9 +86,8 @@
 				var movingVec = new THREE.Vector3( -50, 50, -30 )
 				var rotation = new THREE.Quaternion()
 				rotation.setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI/4 )
-				const tube2 = addMiuraTube( movingVec, rotation )
-				// tube2.applyQuaternion(quaternion)
-				scene.add(tube2)
+				// const tube2 = addMiuraTube( movingVec, rotation )
+				// scene.add(tube2)
 				
 				// let tube3 = addMiuraTube()
 				// tube3.position.set(150, 0, 0)
@@ -103,6 +101,7 @@
 				/**
 				 * Treat a new miura-ori tube as a three.js group
 				 * Initiate a new physical tube with position and quaternion
+				 * Add connectors to the tube
 				*/
 				const tube = new THREE.Group()
 				
@@ -114,14 +113,7 @@
 				})
 				
 				// const connectorBodies = initConnector( hingeBodies )
-				// Add connectors to the tube
 				// connectorBodies.forEach( (body, i) => {
-				// 	// Set the position and quaternion
-				// 	const prevPos = body.position
-				// 	const newPos = new CANNON.Vec3().copy(prevPos).vadd(movingVec)
-				// 	body.position.copy(newPos)
-				// 	body.quaternion.mult(quaternion)
-					
 				// 	// Visualize physical cannon bodies
 				// 	const meshes = bodyToMesh( body )
 				// 	meshes.forEach( (mesh) => { tube.add( mesh ) } )
@@ -132,10 +124,30 @@
 			
 			function initConnector( hingeBodies ) {
 				/**
-				 * Attach connectors to both ends of the tube
+				 * Attach connectors to the ends of a new tube
 				*/
-				let connectorBodies = new Array(2)
+				let tubeBbox = new CANNON.AABB()
+				hingeBodies.forEach( (body) => {
+					tubeBbox.extend( body.aabb )
+				})
+				console.log(tubeBbox.toWorldFrame)
 				
+				const xu = tubeBbox.upperBound.x
+				const xl = tubeBbox.lowerBound.x
+				const yu = tubeBbox.upperBound.y
+				const yl = tubeBbox.lowerBound.y
+				const zu = tubeBbox.upperBound.z
+				const zl = tubeBbox.lowerBound.z
+				
+				const bboxCenter = new CANNON.Vec3( (xu-xl)/2, (yu-yl)/2, (zu-zl)/2 )
+				const newPoint = new CANNON.Vec3()
+				const vec = tubeBbox.lowerBound - newPoint
+				
+				const leftRay = new CANNON.Ray()
+				
+				let connectorBodies = []
+				
+				// Define the shape of the connectors
 				const sphereShape = new CANNON.Sphere(15)
 				const boxShape = new CANNON.Box(new CANNON.Vec3(10,10,10))
 				
@@ -145,8 +157,8 @@
 					shape: sphereShape
 				})
 				connectorBodies[0].position.set(-27,0,0)
-				// connectorBodies[0].collisionFilterGroup = 0
-				// connectorBodies[0].collisionFilterMask = 0
+				connectorBodies[0].collisionFilterGroup = 0
+				connectorBodies[0].collisionFilterMask = 0
 				world.addBody(connectorBodies[0])
 				
 				connectorBodies[1] = new CANNON.Body({
@@ -155,20 +167,11 @@
 					shape: sphereShape
 				})
 				connectorBodies[1].position.set(157,0,0)
-				// connectorBodies[1].collisionFilterGroup = 0
-				// connectorBodies[1].collisionFilterMask = 0
+				connectorBodies[1].collisionFilterGroup = 0
+				connectorBodies[1].collisionFilterMask = 0
 				world.addBody(connectorBodies[1])
-
-				console.log(connectorBodies[0].initPosition)
-				console.log(connectorBodies[1].initPosition)
-
-				console.log(hingeBodies[0].aabb)
-				console.log(hingeBodies[2].aabb)
-				console.log(hingeBodies[4].aabb)
-				console.log(hingeBodies[6].aabb)
 				
-				
-				// Add constraints between connectors and hinge bodies
+				// Add lock constraints between connectors and hinge bodies
 				world.addConstraint(new CANNON.LockConstraint( connectorBodies[0], hingeBodies[0] ))
 				world.addConstraint(new CANNON.LockConstraint( connectorBodies[0], hingeBodies[2] ))
 				world.addConstraint(new CANNON.LockConstraint( connectorBodies[0], hingeBodies[4] ))
@@ -180,6 +183,7 @@
 				world.addConstraint(new CANNON.LockConstraint( connectorBodies[1], hingeBodies[length-5] ))
 				world.addConstraint(new CANNON.LockConstraint( connectorBodies[1], hingeBodies[length-7] ))
 				
+				console.log(connectorBodies)
 				return connectorBodies
 			}
 			
@@ -252,7 +256,7 @@
 				intervalQuat.vmult( intervalVec, intervalVec )
 				
 				// Whether to add hinge constraints (for test)
-				const useHingeConstraints = false
+				const useHingeConstraints = true
 				
 				// Initiatize hinge bodies with shape
 				for ( let i = 0; i < unitNumber; i++ ) {
