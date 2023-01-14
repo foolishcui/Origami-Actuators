@@ -29,7 +29,7 @@
 			
 			/**
 			 * Todo List:
-			 * 解决trimesh faces 碰撞的问题，尝试转化为convex
+			 * Bending tube simulation
 			 * 解决多个tube连接添加连接件的问题, 使用bounding box
 			 * function stopFoldThrough, deflate and inflate simulation (LJX)
 			*/
@@ -47,8 +47,8 @@
 			
 			// Hinge motor velocity that determines speed and direction
 			const initialHingeVelocity = 0
-			const foldingVelocity = Math.PI / 4
-			const foldingDuration = 1200
+			const foldingVelocity = Math.PI / 3
+			const foldingDuration = 800
 			const unfoldingVelocity = -Math.PI / 8
 			const unFoldingDuration = 1000
 			
@@ -58,6 +58,7 @@
 			
 			// User interaction variables
 			let tubeList = []
+			let connectorBodies = []
 			
 			initThree()
 			initCannon()
@@ -65,27 +66,31 @@
 			connectTube()
 			animate()
 			
-			deflateTube()
+			// deflateTube()
 			// inflateTube()
 			
 			initGUI()
 			
 			function connectTube() {
 				/**
-				 * Manipulate tubes in the scene
-				 * Initiate physical bodies and constraints
-				 * Render phsycical body to Mesh
+				 * Manipulate tubes in the scene with pre-defined angles
+				 * Initiate new physical bodies and constraints
+				 * Render phsycical tubes and connectors to Mesh
 				*/
-				var movingVec = new THREE.Vector3( 0, 0, 0 )
-				var rotation = new THREE.Quaternion()
-				// rotation.setFromEuler( new THREE.Euler(0, Math.PI/2, 0 ) )
-				// rotation.setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI/2 )
-				const tube1 = addMiuraTube( movingVec, rotation )
-				scene.add(tube1)
+				// Initialize a default connector in the view firstly
+				initDefaultConnector()
+				console.log(connectorBodies)
 				
-				var movingVec = new THREE.Vector3( -50, 50, -30 )
-				var rotation = new THREE.Quaternion()
-				rotation.setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI/4 )
+				// Let the user select the connector and angle
+				const connectorIndex = connectorBodies[0]
+				const angleIndex = 0
+				
+				// Add a new tube based on the default connector
+				const tube1 = addMiuraTube( connectorIndex, angleIndex )
+				
+				// var movingVec = new THREE.Vector3( -50, 50, -30 )
+				// var rotation = new THREE.Quaternion()
+				// rotation.setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI/4 )
 				// const tube2 = addMiuraTube( movingVec, rotation )
 				// scene.add(tube2)
 				
@@ -97,22 +102,53 @@
 				// console.log(visuals.length)
 			}
 			
-			function addMiuraTube( position, quaternion ) {
+			function addMiuraTube( connectorIndex, angleIndex ) {
 				/**
-				 * Treat a new miura-ori tube as a three.js group
-				 * Initiate a new physical tube with position and quaternion
-				 * Add connectors to the tube
+				 * Initiate a new physical tube with customized position and quaternion
+				 * Treat a new miura-ori tube as a three.js group and render
+				 * Automatically add connector bodies to the tube
+				 * Pre-defined tube bounding box dimensions: length => 155.458538, width => 37.288780, height => 17.527490
+				 * Pre-defined tube volume center: 64.774391, 5.702781, 0 (get from Grasshopper, need to be changed whenever the unitNumber is changed)
 				*/
-				const tube = new THREE.Group()
 				
+				// Calculate position and quaternion according to the connectorIndex and angleIndex
+				const bBoxLength = 155.458538
+				const bBoxWidth = 37.288780
+				const bBoxHeight = 17.527490
+				
+				const centerX = 64.774391
+				const centerY = 5.7027810
+				const centerZ = 0
+				const sphereRadius = 15.0 // connector bounding sphere radius
+				const pivot = new CANNON.Vec3( bBoxLength / 2 + sphereRadius, centerY, 0 ).vadd( connectorIndex.position )
+				
+				const originalTubeCenter = new CANNON.Vec3( centerX, centerY, centerZ )
+				const position = pivot.vsub( originalTubeCenter )
+				
+				const quaternion = new CANNON.Quaternion()
+				
+				if ( angleIndex == 0 ) {
+					quaternion.setFromAxisAngle( new THREE.Vector3(0,1,0), 0 )
+				} else if ( angleIndex == 1 ) {
+					// quaternion.setFromEuler( new THREE.Euler(0, Math.PI/2, 0 ) )
+					quaternion.setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI/2 )
+				} else if ( angleIndex == 2 ) {
+					quaternion.setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI )
+				} else if ( angleIndex == 3 ) {
+					quaternion.setFromAxisAngle( new THREE.Vector3(0,1,0), Math.PI/2*3 )
+				}
+				
+				// Add tube physical bodies to the view based on customized position and quaternion
+				const tube = new THREE.Group()
 				const hingeBodies = initDefaultMiuraTube( position, quaternion )
 				hingeBodies.forEach( (body, i) => {
-					// Visualize physical cannon bodies
 					const meshes = bodyToMesh( body )
 					meshes.forEach( (mesh) => { tube.add( mesh ) } )
 				})
+				scene.add(tube)
 				
-				// const connectorBodies = initConnector( hingeBodies )
+				// Automatically add connector bodies to the tube
+				// const connectorBodies = attachConnector( hingeBodies )
 				// connectorBodies.forEach( (body, i) => {
 				// 	// Visualize physical cannon bodies
 				// 	const meshes = bodyToMesh( body )
@@ -122,7 +158,32 @@
 				return tube
 			}
 			
-			function initConnector( hingeBodies ) {
+			function initDefaultConnector() {
+				/**
+				 * Initialize a default connector in the view
+				*/
+				const sphereRadius = 15
+				const sphereShape = new CANNON.Sphere(sphereRadius)
+				
+				const defaultConnector = new CANNON.Body({
+					mass: 0.1,
+					type: CANNON.Body.DYNAMIC,
+					shape: sphereShape,
+					position: new CANNON.Vec3(0,0,0)
+				})
+				// No collision needed
+				defaultConnector.collisionFilterGroup = 0
+				defaultConnector.collisionFilterMask = 0
+				world.addBody(defaultConnector)
+				
+				// Visualize
+				bodyToMesh(defaultConnector).forEach( (mesh) => scene.add(mesh) )
+				
+				// Add to the connector list
+				connectorBodies.push( defaultConnector )
+			}
+			
+			function attachConnector( hingeBodies ) {
 				/**
 				 * Attach connectors to the ends of a new tube
 				*/
@@ -130,25 +191,17 @@
 				hingeBodies.forEach( (body) => {
 					tubeBbox.extend( body.aabb )
 				})
-				console.log(tubeBbox.toWorldFrame)
+				// console.log(tubeBbox)
 				
-				const xu = tubeBbox.upperBound.x
-				const xl = tubeBbox.lowerBound.x
-				const yu = tubeBbox.upperBound.y
-				const yl = tubeBbox.lowerBound.y
-				const zu = tubeBbox.upperBound.z
-				const zl = tubeBbox.lowerBound.z
-				
-				const bboxCenter = new CANNON.Vec3( (xu-xl)/2, (yu-yl)/2, (zu-zl)/2 )
-				const newPoint = new CANNON.Vec3()
-				const vec = tubeBbox.lowerBound - newPoint
+				const vec = tubeBbox.upperBound.vsub(tubeBbox.lowerBound).scale(0.5)
+				const bboxCenter = new CANNON.Vec3().copy(tubeBbox.lowerBound).vadd(vec)
 				
 				const leftRay = new CANNON.Ray()
-				
-				let connectorBodies = []
+				const rightRay = new CANNON.Ray()
 				
 				// Define the shape of the connectors
-				const sphereShape = new CANNON.Sphere(15)
+				const sphereRadius = 15
+				const sphereShape = new CANNON.Sphere(sphereRadius)
 				const boxShape = new CANNON.Box(new CANNON.Vec3(10,10,10))
 				
 				connectorBodies[0] = new CANNON.Body({
@@ -156,20 +209,20 @@
 					type: CANNON.Body.DYNAMIC,
 					shape: sphereShape
 				})
-				connectorBodies[0].position.set(-27,0,0)
+				connectorBodies[0].position.copy(bboxCenter)
 				connectorBodies[0].collisionFilterGroup = 0
 				connectorBodies[0].collisionFilterMask = 0
 				world.addBody(connectorBodies[0])
 				
-				connectorBodies[1] = new CANNON.Body({
-					mass: 0.1,
-					type: CANNON.Body.DYNAMIC,
-					shape: sphereShape
-				})
-				connectorBodies[1].position.set(157,0,0)
-				connectorBodies[1].collisionFilterGroup = 0
-				connectorBodies[1].collisionFilterMask = 0
-				world.addBody(connectorBodies[1])
+				// connectorBodies[1] = new CANNON.Body({
+				// 	mass: 0.1,
+				// 	type: CANNON.Body.DYNAMIC,
+				// 	shape: sphereShape
+				// })
+				// connectorBodies[1].position.set(157,0,0)
+				// connectorBodies[1].collisionFilterGroup = 0
+				// connectorBodies[1].collisionFilterMask = 0
+				// world.addBody(connectorBodies[1])
 				
 				// Add lock constraints between connectors and hinge bodies
 				world.addConstraint(new CANNON.LockConstraint( connectorBodies[0], hingeBodies[0] ))
@@ -178,17 +231,17 @@
 				world.addConstraint(new CANNON.LockConstraint( connectorBodies[0], hingeBodies[6] ))
 				
 				const length = hingeBodies.length
-				world.addConstraint(new CANNON.LockConstraint( connectorBodies[1], hingeBodies[length-1] ))
-				world.addConstraint(new CANNON.LockConstraint( connectorBodies[1], hingeBodies[length-3] ))
-				world.addConstraint(new CANNON.LockConstraint( connectorBodies[1], hingeBodies[length-5] ))
-				world.addConstraint(new CANNON.LockConstraint( connectorBodies[1], hingeBodies[length-7] ))
+				// world.addConstraint(new CANNON.LockConstraint( connectorBodies[1], hingeBodies[length-1] ))
+				// world.addConstraint(new CANNON.LockConstraint( connectorBodies[1], hingeBodies[length-3] ))
+				// world.addConstraint(new CANNON.LockConstraint( connectorBodies[1], hingeBodies[length-5] ))
+				// world.addConstraint(new CANNON.LockConstraint( connectorBodies[1], hingeBodies[length-7] ))
 				
-				console.log(connectorBodies)
 				return connectorBodies
 			}
 			
 			function initDefaultMiuraTube( position, quaternion ) {
 				/**
+				 * Store face coordinates from the Grasshopper file with 0.65 folding ratio
 				 * Store vertices and indices for the body and geometry of the miura-ori tube
 				 * Initiate the physical miura-ori tube with Trimesh shape
 				 * Specify hinge constraints with axis and pivot point
@@ -534,7 +587,7 @@
 				}
 
 				const stiffness = 1e10
-				const relaxation = 4
+				const relaxation = 0.1
 				const timeStep = 1/60
 				// add the constraints to the world and enable hinge motor
 				constraints.forEach( function( constraint ) {
@@ -845,7 +898,7 @@
 				
 				// Camera
 				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 )
-				camera.position.set( 0, 0, 250 )
+				camera.position.set( 0, 30, 200 )
 
 				// Scene
 				scene = new THREE.Scene()
