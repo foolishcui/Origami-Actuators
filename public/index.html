@@ -45,11 +45,11 @@
 			
 			// Set hinge motor velocity that determines speed and direction
 			const initialHingeVelocity = 0
-			const foldingVelocity = Math.PI / 2
+			const foldingVelocity = Math.PI / 4
 			const foldingDuration = 1600
 			const unfoldingVelocity = -Math.PI / 4
 			const unFoldingDuration = 3000
-			const disSquMin = 380
+			const disSquMin = 400
 			const disSquMax = 720
 			
 			// Keep in sync the bodies with the visuals, they always have the same length
@@ -66,7 +66,7 @@
 			connectTube()
 			animate()
 			
-			deflateTube()
+			// deflateTube()
 			// inflateTube()
 			
 			initGUI()
@@ -91,15 +91,15 @@
 				var tube2 = addMiuraTube( connectorIndex, angleIndex )
 				tubeList.push( tube2 )
 				
-				var connectorIndex = 0
-				var angleIndex = 2
-				var tube3 = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube3 )
+				// var connectorIndex = 0
+				// var angleIndex = 2
+				// var tube3 = addMiuraTube( connectorIndex, angleIndex )
+				// tubeList.push( tube3 )
 				
-				var connectorIndex = 0
-				var angleIndex = 3
-				var tube4 = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube4 )
+				// var connectorIndex = 0
+				// var angleIndex = 3
+				// var tube4 = addMiuraTube( connectorIndex, angleIndex )
+				// tubeList.push( tube4 )
 			}
 			
 			function addMiuraTube( connectorIndex, angleIndex ) {
@@ -116,7 +116,7 @@
 					// Pre-defined angles
 					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), 0 )
 				} else if ( angleIndex == 1 ) {
-					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI/2 )
+					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI/3 )
 				} else if ( angleIndex == 2 ) {
 					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI )
 				} else if ( angleIndex == 3 ) {
@@ -902,7 +902,7 @@
 				// Prevent the tube from becoming a flat surface while inflation
 				stopInflation()
 				
-				// render three.js objects
+				// Render three.js objects
 				controls.update()
 				renderer.render( scene, camera )
 			}
