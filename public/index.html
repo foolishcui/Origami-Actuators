@@ -30,8 +30,8 @@
 			/**
 			 * Todo List:
 			 * Bending tube simulation (LJX)
+			 * Deflate and inflate simulation not stop (LJX)
 			 * Reset folding ratio to 0.75
-			 * function stopFoldThrough, deflate and inflate simulation (LJX)
 			*/
 			
 			// Three.js variables for render
@@ -49,7 +49,7 @@
 			const foldingDuration = 1600
 			const unfoldingVelocity = -Math.PI / 4
 			const unFoldingDuration = 3000
-			const disSquMin = 400
+			const disSquMin = 380
 			const disSquMax = 720
 			
 			// Keep in sync the bodies with the visuals, they always have the same length
@@ -66,7 +66,7 @@
 			connectTube()
 			animate()
 			
-			// deflateTube()
+			deflateTube()
 			// inflateTube()
 			
 			initGUI()
@@ -187,8 +187,8 @@
 				const boxShape = new CANNON.Box(new CANNON.Vec3(10,10,10))
 				
 				const connectorPos = unitVec.unit()
-				const veclength = bBoxLength + sphereRadius * 2
-				connectorPos.scale(veclength, connectorPos)
+				const distance = bBoxLength + sphereRadius * 2
+				connectorPos.scale(distance, connectorPos)
 				
 				const newConnector = new CANNON.Body({
 					mass: 0.1,
