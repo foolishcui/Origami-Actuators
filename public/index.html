@@ -30,6 +30,7 @@
 			/**
 			 * Todo List:
 			 * Bending tube simulation (LJX)
+			 * Reset folding ratio to 0.75
 			 * function stopFoldThrough, deflate and inflate simulation (LJX)
 			*/
 			
@@ -39,17 +40,17 @@
 			
 			// Cannon.js variables for physical simulation
 			let world
-			let useGravity = false
-			const unitNumber = 6	// a miura-ori tube has 6 units
-			let unit = new Array(8)	// a unit has 8 quadrilaterals
 			let constraints = []
+			let useGravity = false
 			
-			// Hinge motor velocity that determines speed and direction
+			// Set hinge motor velocity that determines speed and direction
 			const initialHingeVelocity = 0
 			const foldingVelocity = Math.PI / 2
-			const foldingDuration = 1000
-			const unfoldingVelocity = -Math.PI / 8
-			const unFoldingDuration = 1000
+			const foldingDuration = 1600
+			const unfoldingVelocity = -Math.PI / 4
+			const unFoldingDuration = 3000
+			const disSquMin = 400
+			const disSquMax = 720
 			
 			// Keep in sync the bodies with the visuals, they always have the same length
 			let bodies = []
@@ -65,7 +66,7 @@
 			connectTube()
 			animate()
 			
-			deflateTube()
+			// deflateTube()
 			// inflateTube()
 			
 			initGUI()
@@ -82,23 +83,23 @@
 				
 				var connectorIndex = 0
 				var angleIndex = 0
-				var tube = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube )
+				var tube1 = addMiuraTube( connectorIndex, angleIndex )
+				tubeList.push( tube1 )
 				
 				var connectorIndex = 0
 				var angleIndex = 1
-				var tube = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube )
+				var tube2 = addMiuraTube( connectorIndex, angleIndex )
+				tubeList.push( tube2 )
 				
 				var connectorIndex = 0
 				var angleIndex = 2
-				var tube = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube )
+				var tube3 = addMiuraTube( connectorIndex, angleIndex )
+				tubeList.push( tube3 )
 				
 				var connectorIndex = 0
 				var angleIndex = 3
-				var tube = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube )
+				var tube4 = addMiuraTube( connectorIndex, angleIndex )
+				tubeList.push( tube4 )
 			}
 			
 			function addMiuraTube( connectorIndex, angleIndex ) {
@@ -106,6 +107,7 @@
 				 * Initiate a new physical tube with customized position and quaternion
 				 * Treat a new miura-ori tube as a three.js group and render
 				 * Automatically add connector bodies to the tube
+				 * https://github.com/schteppe/cannon.js/issues/71
 				*/
 				
 				// Calculate position and quaternion according to the connectorIndex and angleIndex
@@ -136,7 +138,7 @@
 				})
 				scene.add(tube)
 				
-				// Automatically add new connector bodies to the scene
+				// Automatically add new connector body to the scene
 				const newConnector = attachConnector( connectorIndex, hingeBodies, unitVec )
 				connectorBodies.push( newConnector )
 				bodyToMesh( newConnector ).forEach( (mesh) => scene.add(mesh) )
@@ -265,8 +267,9 @@
 				const indices = new Uint16Array([0,1,2,0,2,3])
 				
 				// Number of faces in a miura-ori unit
-				let hingeBodiesArray = new Array( unitNumber * unit.length )
-				const unitFacesNum = 8
+				const unitNumber = 6	// a miura-ori tube has 6 units
+				const unitFacesNum = 8  // a unit has 8 quadrilaterals
+				let hingeBodiesArray = new Array( unitNumber * unitFacesNum )
 				const mass = 1
 				
 				// Set the quaternion of the intervalVec
@@ -554,7 +557,7 @@
 				}
 
 				const stiffness = 1e10
-				const relaxation = 1.0
+				const relaxation = 0.5
 				const timeStep = 1/60
 				// add the constraints to the world and enable hinge motor
 				constraints.forEach( function( constraint ) {
@@ -728,27 +731,7 @@
 					world.addConstraint( constraint )
 				})
 			}
-
-			function deflateTube() {
-				const velocity = foldingVelocity
-				constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
-
-				setTimeout(() => {
-					const velocity = 0
-					constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
-				}, foldingDuration)
-			}
 			
-			function inflateTube() {
-				const velocity = unfoldingVelocity
-				constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
-				
-				setTimeout(() => {
-					const velocity = 0
-					constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
-				}, unFoldingDuration)
-			}
-
 			function initCannon() {
 				world = new CANNON.World()
 				world.solver.iterations = 50
@@ -865,7 +848,7 @@
 				
 				// Camera
 				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 )
-				camera.position.set( 0, 30, 200 )
+				camera.position.set( 0, 30, 300 )
 
 				// Scene
 				scene = new THREE.Scene()
@@ -913,25 +896,57 @@
         			visual.quaternion.copy( bodies[i].quaternion )
 				}
 				
+				// Stop hinge bodies folding through each other while deflation
+				stopFacesFoldThrough()
+				
+				// Prevent the tube from becoming a flat surface while inflation
+				stopInflation()
+				
 				// render three.js objects
 				controls.update()
 				renderer.render( scene, camera )
 			}
 			
-			function stopFoldThrough() {
-				/**
-				 * stop two hinge bodies fold through each other
-				 * (1) set the limit of rigid folding
-				*/
+			function deflateTube() {
+				const velocity = foldingVelocity
+				constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+				
+				// setTimeout(() => {
+				// 	const velocity = 0
+				// 	constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+				// }, foldingDuration)
 			}
-
-			function rotateBodies() {
-			  	/**
-				 * rotate cannon bodies
-				*/
-				// https://github.com/schteppe/cannon.js/issues/71
+			
+			function stopFacesFoldThrough() {
+				// Stop hinge bodies folding through each other by setting minimum distance while deflation
+				if ( bodies[1].position.distanceSquared(bodies[9].position) <= disSquMin ) {
+					const velocity = Math.PI / 1000
+					console.log("stopFacesFoldThrough")
+					console.log(velocity)
+					constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+				}
 			}
-
+			
+			function inflateTube() {
+				const velocity = unfoldingVelocity
+				constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+				
+				// setTimeout(() => {
+				// 	const velocity = 0
+				// 	constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+				// }, unFoldingDuration)
+			}
+			
+			function stopInflation() {
+				// Prevent the tube from becoming a flat surface while inflation
+				if ( bodies[1].position.distanceSquared(bodies[9].position) >= disSquMax ) {
+					const velocity = Math.PI / 1000
+					console.log("stopInflation")
+					console.log(velocity)
+					constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+				}
+			}
+			
 			function onWindowResize() {
 				const width = window.innerWidth
 				const height = window.innerHeight
