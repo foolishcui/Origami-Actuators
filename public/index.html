@@ -45,12 +45,13 @@
 			
 			// Set hinge motor velocity that determines speed and direction
 			const initialHingeVelocity = 0
-			const foldingVelocity = Math.PI / 4
+			const foldingVelocity = Math.PI / 2
 			const foldingDuration = 1600
 			const unfoldingVelocity = -Math.PI / 4
 			const unFoldingDuration = 3000
-			const disSquMin = 400
+			const disSquMin = 100
 			const disSquMax = 720
+			let flag = 0
 			
 			// Keep in sync the bodies with the visuals, they always have the same length
 			let bodies = []
@@ -58,6 +59,7 @@
 			
 			// User interaction variables
 			let tubeList = []
+			let connectorMeshes = []
 			let connectorBodies = []
 			
 			initThree()
@@ -79,17 +81,20 @@
 				*/
 				const defaultConnector = initDefaultConnector()
 				connectorBodies.push( defaultConnector )
-				bodyToMesh( defaultConnector ).forEach( (mesh) => scene.add(mesh) )
+				bodyToMesh( defaultConnector ).forEach( (mesh) => {
+					scene.add( mesh )
+					connectorMeshes.push( mesh )
+				})
 				
 				var connectorIndex = 0
 				var angleIndex = 0
-				var tube1 = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube1 )
+				var tube = addMiuraTube( connectorIndex, angleIndex )
+				tubeList.push( tube )
 				
 				var connectorIndex = 0
 				var angleIndex = 1
-				var tube2 = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube2 )
+				var tube = addMiuraTube( connectorIndex, angleIndex )
+				tubeList.push( tube )
 				
 				// var connectorIndex = 0
 				// var angleIndex = 2
@@ -118,16 +123,19 @@
 				} else if ( angleIndex == 1 ) {
 					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI/3 )
 				} else if ( angleIndex == 2 ) {
-					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI )
+					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI/3*2 )
 				} else if ( angleIndex == 3 ) {
-					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI/2*3 )
+					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI )
 				}
 				
+				// Copy pivot connector position
+				const position = new CANNON.Vec3().copy( connectorBodies[connectorIndex].position )
+				
 				const intervalDistance = 12.954878  // half width of the Miura-ori tube unit
-				const sphereRadius = 15.0  // Connector bounding sphere radius
+				const sphereRadius = 15.0  // connector bounding sphere radius
 				const unitVec = new CANNON.Vec3( sphereRadius + intervalDistance, 0, 0 )
 				quaternion.vmult( unitVec, unitVec )
-				const position = new CANNON.Vec3().copy(unitVec)
+				position.vadd( unitVec, position )
 				
 				// Render tube physical bodies to the view based on customized position and quaternion
 				const tube = new THREE.Group()
@@ -140,8 +148,13 @@
 				
 				// Automatically add new connector body to the scene
 				const newConnector = attachConnector( connectorIndex, hingeBodies, unitVec )
-				connectorBodies.push( newConnector )
-				bodyToMesh( newConnector ).forEach( (mesh) => scene.add(mesh) )
+				if ( newConnector != undefined ) {
+					connectorBodies.push( newConnector )
+					bodyToMesh( newConnector ).forEach( (mesh) => {
+						scene.add( mesh )
+						connectorMeshes.push( mesh )
+					})
+				}
 			}
 			
 			function initDefaultConnector() {
@@ -152,7 +165,7 @@
 				const sphereShape = new CANNON.Sphere(sphereRadius)
 				
 				const defaultConnector = new CANNON.Body({
-					mass: 0,
+					mass: 0.1,
 					type: CANNON.Body.DYNAMIC,
 					shape: sphereShape,
 					position: new CANNON.Vec3(0,0,0)
@@ -175,37 +188,60 @@
 				world.addConstraint(new CANNON.LockConstraint( connectorBodies[connectorIndex], hingeBodies[2] ))
 				world.addConstraint(new CANNON.LockConstraint( connectorBodies[connectorIndex], hingeBodies[4] ))
 				world.addConstraint(new CANNON.LockConstraint( connectorBodies[connectorIndex], hingeBodies[6] ))
-
+				
 				// Pre-defined tube bounding box dimensions: length => 155.458538, width => 37.288780, height => 17.527490
 				const bBoxLength = 155.458538
 				const bBoxWidth = 37.288780
 				const bBoxHeight = 17.527490
 				
-				// Attach a new connector
 				const sphereRadius = 15
 				const sphereShape = new CANNON.Sphere(sphereRadius)
 				const boxShape = new CANNON.Box(new CANNON.Vec3(10,10,10))
 				
-				const connectorPos = unitVec.unit()
+				const newPos = unitVec.unit()
 				const distance = bBoxLength + sphereRadius * 2
-				connectorPos.scale(distance, connectorPos)
+				newPos.scale( distance, newPos )
+				newPos.vadd( connectorBodies[connectorIndex].position, newPos )
 				
-				const newConnector = new CANNON.Body({
-					mass: 0.1,
-					type: CANNON.Body.DYNAMIC,
-					shape: sphereShape,
-					position: connectorPos
-				})
-				newConnector.collisionFilterGroup = 0
-				newConnector.collisionFilterMask = 0
-				world.addBody(newConnector)
+				// Set a flag: True => add a new connector; Flase => Do not add
+				let flag = true
 				
-				world.addConstraint(new CANNON.LockConstraint( newConnector, hingeBodies[hingeBodies.length-1] ))
-				world.addConstraint(new CANNON.LockConstraint( newConnector, hingeBodies[hingeBodies.length-3] ))
-				world.addConstraint(new CANNON.LockConstraint( newConnector, hingeBodies[hingeBodies.length-5] ))
-				world.addConstraint(new CANNON.LockConstraint( newConnector, hingeBodies[hingeBodies.length-7] ))
-
-				return newConnector
+				// Check if there is a existing connector in the new position
+				for ( let i=0; i<connectorBodies.length; i++ ) {
+					const vecEqual = newPos.almostEquals( connectorBodies[i].position )
+					if ( vecEqual == true ) {
+						flag = false
+						
+						// Add lock constraints between the exsiting connector and hinge bodies
+						world.addConstraint(new CANNON.LockConstraint( connectorBodies[i], hingeBodies[hingeBodies.length-1] ))
+						world.addConstraint(new CANNON.LockConstraint( connectorBodies[i], hingeBodies[hingeBodies.length-3] ))
+						world.addConstraint(new CANNON.LockConstraint( connectorBodies[i], hingeBodies[hingeBodies.length-5] ))
+						world.addConstraint(new CANNON.LockConstraint( connectorBodies[i], hingeBodies[hingeBodies.length-7] ))
+					}
+				}
+				
+				if ( flag == false ) {
+					console.log("No end connector is added to this tube")
+					return undefined
+				} else {
+					// Attach a new connector to the end of the tube
+					const newConnector = new CANNON.Body({
+						mass: 0.1,
+						type: CANNON.Body.DYNAMIC,
+						shape: sphereShape,
+						position: newPos
+					})
+					newConnector.collisionFilterGroup = 0
+					newConnector.collisionFilterMask = 0
+					world.addBody(newConnector)
+					
+					world.addConstraint(new CANNON.LockConstraint( newConnector, hingeBodies[hingeBodies.length-1] ))
+					world.addConstraint(new CANNON.LockConstraint( newConnector, hingeBodies[hingeBodies.length-3] ))
+					world.addConstraint(new CANNON.LockConstraint( newConnector, hingeBodies[hingeBodies.length-5] ))
+					world.addConstraint(new CANNON.LockConstraint( newConnector, hingeBodies[hingeBodies.length-7] ))
+					
+					return newConnector
+				}
 			}
 			
 			function initDefaultMiuraTube( position, quaternion ) {
@@ -816,15 +852,16 @@
 					}
 				})
 				
-				// Multiple shapes in one body (compound body)
+				// In case multiple shapes in one body (compound body)
 				meshes.forEach( (mesh, i) => {
 					// console.log(mesh)
 					mesh.position.copy( body.shapeOffsets[i] )
 					mesh.quaternion.copy( body.shapeOrientations[i] )
-					// enable shadows on every object
+					// Enable shadows on every object
 					mesh.receiveShadow = true
     				mesh.castShadow = true
 					
+					// For function animation()
 					bodies.push(body)
 					visuals.push(mesh)
 				})
@@ -848,7 +885,7 @@
 				
 				// Camera
 				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 )
-				camera.position.set( 0, 30, 300 )
+				camera.position.set( 100, 200, 300 )
 
 				// Scene
 				scene = new THREE.Scene()
@@ -917,12 +954,30 @@
 				// }, foldingDuration)
 			}
 			
+			// function stopFacesFoldThrough() {
+			// 	// Stop hinge bodies folding through each other by setting minimum distance while deflation
+			// 	if ( bodies[1].position.distanceSquared(bodies[9].position) <= disSquMin ) {
+			// 		const velocity = Math.PI / 1000
+			// 		console.log("stopFacesFoldThrough")
+			// 		console.log(velocity)
+			// 		constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+			// 	}
+			// }
+			
 			function stopFacesFoldThrough() {
-				// Stop hinge bodies folding through each other by setting minimum distance while deflation
-				if ( bodies[1].position.distanceSquared(bodies[9].position) <= disSquMin ) {
-					const velocity = Math.PI / 1000
-					console.log("stopFacesFoldThrough")
+				if ( bodies[17].position.distanceSquared(bodies[25].position) > disSquMin && bodies[17].position.distanceSquared(bodies[25].position) < disSquMin+100 ) {
+					const velocity = Math.PI / 20
+					console.log('current flag=0')
+					flag = 1
 					console.log(velocity)
+					constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+					bodies.forEach(body=>body.sleep())
+					bodies.forEach(body=>body.wakeUp())
+				}
+				
+				if ( bodies[17].position.distanceSquared(bodies[25].position) > disSquMin + 100 && flag==1 ) {
+					console.log('set flag=1')
+					const velocity = Math.PI / 8
 					constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
 				}
 			}
@@ -954,10 +1009,10 @@
 				camera.updateProjectionMatrix()
 				renderer.setSize( width, height )
 			}
-
+			
 			function initGUI() {
 				/**
-				 * user interface & design workflow
+				 * User interface & design workflow
 				*/
 				let data = {
 					x: 1
@@ -971,10 +1026,39 @@
 			}
 			
 			// Mouse interactions
-			window.addEventListener( 'pointdown', (event) => {
-				// Fired when a pointer becomes active buttons state
+			window.addEventListener( 'pointerdown', (event) => {
+				/**
+				 * Fired when a pointer becomes active state
+				 * Cast a ray from where the mouse is pointing to select a connector
+				*/
+				// Get 3D point from the client x y coordinates
+				const mouse = new THREE.Vector2()
+				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
+        		mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
+				
+				// Get the picking ray from the point
+				const raycaster = new THREE.Raycaster()
+				raycaster.setFromCamera( mouse, camera )
+				
+				const hits = raycaster.intersectObject( connectorMeshes[1] )
+				
+				// Get the closest hit object
+				if (hits.length > 0) {
+					const object = hits[0].object
+					// console.log(object)
+					
+					var connectorIndex = 1
+					var angleIndex = 2
+					var tube = addMiuraTube( connectorIndex, angleIndex )
+					tubeList.push( tube )
+					
+					deflateTube()
+				} else {
+					return
+				}
 			})
 
 		</script>
 	</body>
 </html>
+
