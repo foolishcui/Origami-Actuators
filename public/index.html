@@ -31,6 +31,7 @@
 			 * Todo List:
 			 * Bending tube simulation (LJX)
 			 * Deflate and inflate simulation not stop (LJX)
+			 * Single tube control
 			 * Reset folding ratio to 0.75
 			*/
 			
@@ -117,6 +118,7 @@
 				
 				// Calculate position and quaternion according to the connectorIndex and angleIndex
 				const quaternion = new CANNON.Quaternion()
+				
 				if ( angleIndex == 0 ) {
 					// Pre-defined angles
 					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), 0 )
@@ -196,7 +198,7 @@
 				
 				const sphereRadius = 15
 				const sphereShape = new CANNON.Sphere(sphereRadius)
-				const boxShape = new CANNON.Box(new CANNON.Vec3(10,10,10))
+				// const boxShape = new CANNON.Box(new CANNON.Vec3(10,10,10))
 				
 				const newPos = unitVec.unit()
 				const distance = bBoxLength + sphereRadius * 2
@@ -885,7 +887,7 @@
 				
 				// Camera
 				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 )
-				camera.position.set( 100, 200, 300 )
+				camera.position.set( 100, 300, 300 )
 
 				// Scene
 				scene = new THREE.Scene()
@@ -1040,24 +1042,24 @@
 				const raycaster = new THREE.Raycaster()
 				raycaster.setFromCamera( mouse, camera )
 				
-				const hits = raycaster.intersectObject( connectorMeshes[1] )
-				
-				// Get the closest hit object
-				if (hits.length > 0) {
-					const object = hits[0].object
-					// console.log(object)
+				console.log(connectorMeshes.length)
+				// Loop the connectorMeshes to get which object is selected
+				for ( let i = 0; i<connectorMeshes.length; i++ ) {
+					const hits = raycaster.intersectObject( connectorMeshes[i] )
 					
-					var connectorIndex = 1
-					var angleIndex = 2
-					var tube = addMiuraTube( connectorIndex, angleIndex )
-					tubeList.push( tube )
-					
-					deflateTube()
-				} else {
-					return
+					// Get the closest hit object
+					if (hits.length > 0) {
+						console.log( hits.length )
+						const object = hits[0].object
+						var connectorIndex = i
+						var angleIndex = 2
+						var tube = addMiuraTube( connectorIndex, angleIndex )
+						tubeList.push( tube )
+						
+						// deflateTube()
+					}
 				}
 			})
-
 		</script>
 	</body>
 </html>
