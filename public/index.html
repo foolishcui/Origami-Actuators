@@ -157,6 +157,7 @@
 						connectorMeshes.push( mesh )
 					})
 				}
+				console.log(connectorMeshes.length)
 			}
 			
 			function initDefaultConnector() {
@@ -172,7 +173,7 @@
 					shape: sphereShape,
 					position: new CANNON.Vec3(0,0,0)
 				})
-
+				
 				// No collision needed
 				defaultConnector.collisionFilterGroup = 0
 				defaultConnector.collisionFilterMask = 0
@@ -205,7 +206,7 @@
 				newPos.scale( distance, newPos )
 				newPos.vadd( connectorBodies[connectorIndex].position, newPos )
 				
-				// Set a flag: True => add a new connector; Flase => Do not add
+				// Set a flag: True => Add a new connector; Flase => Do not add
 				let flag = true
 				
 				// Check if there is a existing connector in the new position
@@ -223,7 +224,6 @@
 				}
 				
 				if ( flag == false ) {
-					console.log("No end connector is added to this tube")
 					return undefined
 				} else {
 					// Attach a new connector to the end of the tube
@@ -1042,17 +1042,17 @@
 				const raycaster = new THREE.Raycaster()
 				raycaster.setFromCamera( mouse, camera )
 				
-				console.log(connectorMeshes.length)
 				// Loop the connectorMeshes to get which object is selected
-				for ( let i = 0; i<connectorMeshes.length; i++ ) {
+				const connectorNum = connectorMeshes.length
+				for ( let i = 0; i<connectorNum; i++ ) {
 					const hits = raycaster.intersectObject( connectorMeshes[i] )
 					
 					// Get the closest hit object
 					if (hits.length > 0) {
-						console.log( hits.length )
-						const object = hits[0].object
+						// const object = hits[0].object
 						var connectorIndex = i
 						var angleIndex = 2
+						
 						var tube = addMiuraTube( connectorIndex, angleIndex )
 						tubeList.push( tube )
 						
