@@ -30,8 +30,9 @@
 			/**
 			 * Todo List:
 			 * Bending tube simulation (LJX)
-			 * Deflate and inflate simulation not stop (LJX)
-			 * Reset folding ratio to 0.75
+			 * Deflate and inflate simulation not stop (CZT)
+			 * Reset folding ratio to 0.75 (CZT)
+			 * Start interaction implementation
 			*/
 			
 			// Three.js variables for render
@@ -44,11 +45,11 @@
 			
 			// Set hinge motor velocity that determines speed and direction
 			const initialHingeVelocity = 0
-			const foldingVelocity = Math.PI / 2
+			const foldingVelocity = Math.PI / 2.5
 			const foldingDuration = 1600
-			const unfoldingVelocity = -Math.PI / 4
+			const unfoldingVelocity = - Math.PI / 4
 			const unFoldingDuration = 3000
-			const disSquMin = 100
+			const disSquMin = 120
 			const disSquMax = 720
 			let flag = 0
 			
@@ -57,9 +58,10 @@
 			let visuals = []
 			
 			// User interaction variables
-			let tubeList = []
-			let deflationConstraints = []
-			let inflationConstraints = []
+			let tubeVisualList = []
+			let tubeBodiesList = []
+			let deflationTubes = []
+			let inflationtubes = []
 			let connectorMeshes = []
 			let connectorBodies = []
 			
@@ -69,8 +71,8 @@
 			connectTube()
 			animate()
 			
-			deflateTube( deflationConstraints )
-			// inflateTube()
+			deflateTube( deflationTubes )
+			// inflateTube( inflationConstraints )
 			
 			initGUI()
 			
@@ -90,25 +92,23 @@
 				var connectorIndex = 0
 				var angleIndex = 0
 				var tube = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube.tubeVisual )
-				deflationConstraints.push( tube.hingeConstraints )
+				tubeVisualList.push( tube.tubeVisual )
+				tubeBodiesList.push( tube.hingeBodies )
+				deflationTubes.push( tube )
 				
 				var connectorIndex = 0
 				var angleIndex = 1
 				var tube = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube.tubeVisual )
-				deflationConstraints.push( tube.hingeConstraints )
+				tubeVisualList.push( tube.tubeVisual )
+				tubeBodiesList.push( tube.hingeBodies )
+				deflationTubes.push( tube )
 				
 				var connectorIndex = 1
 				var angleIndex = 2
 				var tube = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube.tubeVisual )
-				// deflationConstraints.push( tube.hingeConstraints )
-				
-				// var connectorIndex = 0
-				// var angleIndex = 3
-				// var tube4 = addMiuraTube( connectorIndex, angleIndex )
-				// tubeList.push( tube4 )
+				tubeVisualList.push( tube.tubeVisual )
+				tubeBodiesList.push( tube.hingeBodies )
+				deflationTubes.push( tube )
 			}
 			
 			function addMiuraTube( connectorIndex, angleIndex ) {
@@ -143,13 +143,11 @@
 				position.vadd( unitVec, position )
 				
 				// Render tube physical bodies to the view based on customized position and quaternion
-				const tubeVisual = new THREE.Group()
-				// const hingeBodies, hingeConstraints = initDefaultMiuraTube( position, quaternion )
-
 				const tubeInfo = initDefaultMiuraTube( position, quaternion )
 				const hingeBodies = tubeInfo.hingeBodiesArray
 				const hingeConstraints = tubeInfo.constraints
-
+				
+				const tubeVisual = new THREE.Group()
 				hingeBodies.forEach( (body, i) => {
 					const meshes = bodyToMesh( body )
 					meshes.forEach( (mesh) => { tubeVisual.add( mesh ) } )
@@ -166,7 +164,7 @@
 					})
 				}
 				
-				return {tubeVisual, hingeConstraints}
+				return {tubeVisual, hingeBodies, hingeConstraints}
 			}
 			
 			function initDefaultConnector() {
@@ -947,7 +945,7 @@
 				}
 				
 				// Stop hinge bodies folding through each other while deflation
-				stopFacesFoldThrough( deflationConstraints )
+				stopFacesFoldThrough( deflationTubes )
 				
 				// Prevent the tube from becoming a flat surface while inflation
 				stopInflation()
@@ -957,10 +955,13 @@
 				renderer.render( scene, camera )
 			}
 			
-			function deflateTube( deflationConstraints ) {
+			function deflateTube( deflationTubes ) {
+				// Give velocity to hingeConstraints
 				const velocity = foldingVelocity
-				for ( let i = 0; i < deflationConstraints.length; i++ ) {
-					deflationConstraints[i].forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )	
+				
+				console.log(deflationTubes)
+				for ( let i = 0; i < deflationTubes.length; i++ ) {
+					deflationTubes[i].hingeConstraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
 				}
 				
 				// setTimeout(() => {
@@ -969,35 +970,14 @@
 				// }, foldingDuration)
 			}
 			
-			// function stopFacesFoldThrough() {
-			// 	// Stop hinge bodies folding through each other by setting minimum distance while deflation
-			// 	if ( bodies[1].position.distanceSquared(bodies[9].position) <= disSquMin ) {
-			// 		const velocity = Math.PI / 1000
-			// 		console.log("stopFacesFoldThrough")
-			// 		console.log(velocity)
-			// 		constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
-			// 	}
-			// }
-			
-			function stopFacesFoldThrough( deflationConstraints ) {
-				if ( bodies[17].position.distanceSquared(bodies[25].position) > disSquMin && bodies[17].position.distanceSquared(bodies[25].position) < disSquMin+100 ) {
-					const velocity = Math.PI / 20
-					console.log('set flag=0')
-					flag = 1
+			function stopFacesFoldThrough( deflationTubes ) {
+				// Stop hinge bodies folding through each other by setting minimum distance while deflation
+				for ( let i = 0; i < deflationTubes.length; i++ ) {
+					const refBody1 = deflationTubes[i].hingeBodies[17]
+					const refBody2 = deflationTubes[i].hingeBodies[25]
 					
-					for ( let i = 0; i < deflationConstraints.length; i++ ) {
-						deflationConstraints[i].forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )	
-					}
-					
-					bodies.forEach(body=>body.sleep())
-					bodies.forEach(body=>body.wakeUp())
-				}
-				
-				if ( bodies[17].position.distanceSquared(bodies[25].position) > disSquMin + 100 && flag==1 ) {
-					console.log('set flag=1')
-					const velocity = Math.PI / 8
-					for ( let i = 0; i < deflationConstraints.length; i++ ) {
-						deflationConstraints[i].forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )	
+					if ( refBody1.position.distanceSquared( refBody2.position ) < disSquMin ) {
+						deflationTubes[i].hingeBodies.forEach( body => body.sleep() )
 					}
 				}
 			}
@@ -1012,7 +992,7 @@
 				// }, unFoldingDuration)
 			}
 			
-			function stopInflation() {
+			function stopInflation( inflationConstraints ) {
 				// Prevent the tube from becoming a flat surface while inflation
 				if ( bodies[1].position.distanceSquared(bodies[9].position) >= disSquMax ) {
 					const velocity = Math.PI / 1000
@@ -1070,14 +1050,13 @@
 						// const object = hits[0].object
 						var connectorIndex = i
 						var angleIndex = 3
-							
 						var tube = addMiuraTube( connectorIndex, angleIndex )
-						tubeList.push( tube.tubeVisual )
-						deflationConstraints.push( tube.hingeConstraints )
+						tubeVisualList.push( tube.tubeVisual )
+						tubeBodiesList.push( tube.hingeBodies )
+						// deflationConstraints.push( tube )
 					}
 				}
 			})
 		</script>
 	</body>
 </html>
-
