@@ -31,7 +31,6 @@
 			 * Todo List:
 			 * Bending tube simulation (LJX)
 			 * Deflate and inflate simulation not stop (LJX)
-			 * Single tube control
 			 * Reset folding ratio to 0.75
 			*/
 			
@@ -41,7 +40,6 @@
 			
 			// Cannon.js variables for physical simulation
 			let world
-			let constraints = []
 			let useGravity = false
 			
 			// Set hinge motor velocity that determines speed and direction
@@ -60,6 +58,8 @@
 			
 			// User interaction variables
 			let tubeList = []
+			let deflationConstraints = []
+			let inflationConstraints = []
 			let connectorMeshes = []
 			let connectorBodies = []
 			
@@ -69,7 +69,7 @@
 			connectTube()
 			animate()
 			
-			// deflateTube()
+			deflateTube( deflationConstraints )
 			// inflateTube()
 			
 			initGUI()
@@ -90,17 +90,20 @@
 				var connectorIndex = 0
 				var angleIndex = 0
 				var tube = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube )
+				tubeList.push( tube.tubeVisual )
+				deflationConstraints.push( tube.hingeConstraints )
 				
 				var connectorIndex = 0
 				var angleIndex = 1
 				var tube = addMiuraTube( connectorIndex, angleIndex )
-				tubeList.push( tube )
+				tubeList.push( tube.tubeVisual )
+				deflationConstraints.push( tube.hingeConstraints )
 				
-				// var connectorIndex = 0
-				// var angleIndex = 2
-				// var tube3 = addMiuraTube( connectorIndex, angleIndex )
-				// tubeList.push( tube3 )
+				var connectorIndex = 1
+				var angleIndex = 2
+				var tube = addMiuraTube( connectorIndex, angleIndex )
+				tubeList.push( tube.tubeVisual )
+				// deflationConstraints.push( tube.hingeConstraints )
 				
 				// var connectorIndex = 0
 				// var angleIndex = 3
@@ -140,13 +143,18 @@
 				position.vadd( unitVec, position )
 				
 				// Render tube physical bodies to the view based on customized position and quaternion
-				const tube = new THREE.Group()
-				const hingeBodies = initDefaultMiuraTube( position, quaternion )
+				const tubeVisual = new THREE.Group()
+				// const hingeBodies, hingeConstraints = initDefaultMiuraTube( position, quaternion )
+
+				const tubeInfo = initDefaultMiuraTube( position, quaternion )
+				const hingeBodies = tubeInfo.hingeBodiesArray
+				const hingeConstraints = tubeInfo.constraints
+
 				hingeBodies.forEach( (body, i) => {
 					const meshes = bodyToMesh( body )
-					meshes.forEach( (mesh) => { tube.add( mesh ) } )
+					meshes.forEach( (mesh) => { tubeVisual.add( mesh ) } )
 				})
-				scene.add(tube)
+				scene.add(tubeVisual)
 				
 				// Automatically add new connector body to the scene
 				const newConnector = attachConnector( connectorIndex, hingeBodies, unitVec )
@@ -157,7 +165,8 @@
 						connectorMeshes.push( mesh )
 					})
 				}
-				console.log(connectorMeshes.length)
+				
+				return {tubeVisual, hingeConstraints}
 			}
 			
 			function initDefaultConnector() {
@@ -318,6 +327,7 @@
 				
 				// Whether to add hinge constraints (for test)
 				const useHingeConstraints = true
+				let constraints = []
 				
 				// Initiatize hinge bodies with shape
 				for ( let i = 0; i < unitNumber; i++ ) {
@@ -597,7 +607,8 @@
 				const stiffness = 1e10
 				const relaxation = 0.5
 				const timeStep = 1/60
-				// add the constraints to the world and enable hinge motor
+				
+				// Add the constraints to the world and enable hinge motor, each tube has 92 hinge constraints
 				constraints.forEach( function( constraint ) {
 					constraint.equations.forEach(function( equation ) {
 						// set greater stiffness on the hinge
@@ -608,8 +619,8 @@
 					constraint.setMotorSpeed( initialHingeVelocity )
 					world.addConstraint( constraint )
 				})
-
-				return hingeBodiesArray
+				
+				return {hingeBodiesArray, constraints}
 			}
 			
 			function initFlatMiuraTube() {
@@ -887,7 +898,7 @@
 				
 				// Camera
 				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 )
-				camera.position.set( 100, 300, 300 )
+				camera.position.set( 0, 400, 300 )
 
 				// Scene
 				scene = new THREE.Scene()
@@ -936,7 +947,7 @@
 				}
 				
 				// Stop hinge bodies folding through each other while deflation
-				stopFacesFoldThrough()
+				stopFacesFoldThrough( deflationConstraints )
 				
 				// Prevent the tube from becoming a flat surface while inflation
 				stopInflation()
@@ -946,9 +957,11 @@
 				renderer.render( scene, camera )
 			}
 			
-			function deflateTube() {
+			function deflateTube( deflationConstraints ) {
 				const velocity = foldingVelocity
-				constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+				for ( let i = 0; i < deflationConstraints.length; i++ ) {
+					deflationConstraints[i].forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )	
+				}
 				
 				// setTimeout(() => {
 				// 	const velocity = 0
@@ -966,13 +979,16 @@
 			// 	}
 			// }
 			
-			function stopFacesFoldThrough() {
+			function stopFacesFoldThrough( deflationConstraints ) {
 				if ( bodies[17].position.distanceSquared(bodies[25].position) > disSquMin && bodies[17].position.distanceSquared(bodies[25].position) < disSquMin+100 ) {
 					const velocity = Math.PI / 20
-					console.log('current flag=0')
+					console.log('set flag=0')
 					flag = 1
-					console.log(velocity)
-					constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+					
+					for ( let i = 0; i < deflationConstraints.length; i++ ) {
+						deflationConstraints[i].forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )	
+					}
+					
 					bodies.forEach(body=>body.sleep())
 					bodies.forEach(body=>body.wakeUp())
 				}
@@ -980,7 +996,9 @@
 				if ( bodies[17].position.distanceSquared(bodies[25].position) > disSquMin + 100 && flag==1 ) {
 					console.log('set flag=1')
 					const velocity = Math.PI / 8
-					constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+					for ( let i = 0; i < deflationConstraints.length; i++ ) {
+						deflationConstraints[i].forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )	
+					}
 				}
 			}
 			
@@ -1051,12 +1069,11 @@
 					if (hits.length > 0) {
 						// const object = hits[0].object
 						var connectorIndex = i
-						var angleIndex = 2
-						
+						var angleIndex = 3
+							
 						var tube = addMiuraTube( connectorIndex, angleIndex )
-						tubeList.push( tube )
-						
-						// deflateTube()
+						tubeList.push( tube.tubeVisual )
+						deflationConstraints.push( tube.hingeConstraints )
 					}
 				}
 			})
