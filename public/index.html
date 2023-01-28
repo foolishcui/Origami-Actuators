@@ -33,10 +33,10 @@
 			 * Start interaction implementation (JX)
 			*/
 			
-			// Three.js variables for render
+			// Three.js variables for render 
 			let renderer, camera, scene
-			let controls, gui
-			
+			let controls
+			const gui = new GUI()
 			// Cannon.js variables for physical simulation
 			let world
 			let useGravity = false
@@ -49,6 +49,7 @@
 			const unFoldingDuration = 3000
 			const disSquMin = 180
 			const disSquMax = 720
+
 			
 			// Keep in sync the bodies with the visuals, they always have the same length
 			let bodies = []
@@ -61,17 +62,31 @@
 			let inflationtubes = []
 			let connectorMeshes = []
 			let connectorBodies = []
-			
+			var type = {
+				type : "edit",
+			}
+			var testObj = {
+				tube: "normal",
+				angle: 2,
+				group:1,
+			};
+
+			var testObj2 = {
+				type: "delete",
+			};
+			let INTERSECTED =0
+
 			initThree()
 			initCannon()
 			
 			connectTube()
+			initGUI()
 			animate()
-			
+
 			deflateTube( deflationTubes )
 			// inflateTube( inflationConstraints )
 			
-			initGUI()
+	
 			
 			function connectTube() {
 				/**
@@ -1269,7 +1284,7 @@
 				// Materials
 				const basicMaterial = new THREE.MeshBasicMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
 				const phongMaterial = new THREE.MeshPhongMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
-				const normalMaterial = new THREE.MeshNormalMaterial( {side: THREE.DoubleSide, wireframe: false} )
+				const normalMaterial = new THREE.MeshNormalMaterial( {color: 0x44aa88,side: THREE.DoubleSide, wireframe: false} )
 				const material = normalMaterial
 				// const colors = new Float32Array()
 				
@@ -1388,7 +1403,6 @@
 			
 			function animate() {
 				requestAnimationFrame( animate )
-				
 				// Step the physical simulation forward
 				world.fixedStep()
 				
@@ -1408,7 +1422,7 @@
 				
 				// Render three.js objects
 				controls.update()
-				renderer.render( scene, camera )
+				// renderer.render( scene, camera )
 			}
 			
 			function deflateTube( deflationTubes ) {
@@ -1469,15 +1483,14 @@
 				/**
 				 * User interface & design workflow
 				*/
-				let data = {
-					x: 1
-				}
-				const gui = new GUI
-				gui.add(data, "x", -5, -1, 0.01).onChange(() => {
-					// geometry.attributes.position.array[3] = data.x
-					// geometry.attributes.position.needsUpdate = true
-				})
-				gui.open();
+				var title = gui.add(type, "type", ['add', 'edit'])
+				var f = gui.addFolder('add');
+				f.add(testObj, "tube", ['normal', 'bending'])
+				f.add(testObj, "angle",0,3,1)
+				f.open();
+				var e = gui.addFolder('edit');
+				e.add(testObj2, "type", ['delete', 'group'])
+				e.open()
 			}
 			
 			// Mouse interactions
@@ -1497,22 +1510,95 @@
 				
 				// Loop the connectorMeshes to get which object is selected
 				const connectorNum = connectorMeshes.length
-				for ( let i = 0; i<connectorNum; i++ ) {
-					const hits = raycaster.intersectObject( connectorMeshes[i] )
-					
-					// Get the closest hit object
-					if (hits.length > 0) {
-						// const object = hits[0].object
-						var tubeType = 1
-						var connectorIndex = i
-						var angleIndex = 3
-						var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-						tubeVisualList.push( tube.tubeVisual )
-						tubeBodiesList.push( tube.hingeBodies )
-						deflationTubes.push( tube )
+
+				const tubeNum = tubeVisualList.length
+
+				if(type.type=='add'){					
+					for ( let i = 0; i<connectorNum; i++ ) {
+						const hits = raycaster.intersectObject( connectorMeshes[i] )
+						// Get the closest hit object
+						if (hits.length > 0) {
+							// const object = hits[0].object
+							if(testObj.tube=="bending"){
+								var tubeType = 1
+								var connectorIndex = i
+								var angleIndex = testObj.angle
+								var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+								tubeVisualList.push( tube.tubeVisual )
+								tubeBodiesList.push( tube.hingeBodies )
+								deflationTubes.push( tube )
+							}
+							if(testObj.tube=="normal"){
+								var tubeType = 0
+								var connectorIndex = i
+								var angleIndex = testObj.angle
+								var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+								tubeVisualList.push( tube.tubeVisual )
+								tubeBodiesList.push( tube.hingeBodies )
+								deflationTubes.push( tube )
+							}
+
+						}
 					}
 				}
+
+				if(type.type=='edit'){
+					
+					if(testObj2.type=="delete"){
+						
+						for ( let i = 0; i<tubeNum; i++ ) {
+							const hits = raycaster.intersectObject( tubeVisualList[i] )
+							console.log(hits[0])
+							console.log(bodies)
+							console.log(visuals)
+						// Get the closest hit object
+							if (hits.length > 0) {
+								// const object = hits[0].object
+								// tubeVisualList.delete[i]
+								
+								console.log(tubeVisualList)
+								console.log(tubeBodiesList)
+							}
+						}
+					}
+				}
+
 			})
+			function render(){
+				const mouse = new THREE.Vector2()
+				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
+        		mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
+				
+				// Get the picking ray from the point
+				const raycaster = new THREE.Raycaster()
+				raycaster.setFromCamera( mouse, camera )
+
+				// 计算物体和射线的焦点
+				const intersects = raycaster.intersectObjects( scene.children,false );
+
+				if ( intersects.length > 0 ) {
+
+					if ( INTERSECTED != intersects[ 0 ].object ) {
+
+						if ( INTERSECTED ) INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+
+						INTERSECTED = intersects[ 0 ].object;
+						INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
+						INTERSECTED.material.emissive.setHex( 0xff0000 );
+
+					}
+
+					} else {
+
+					if ( INTERSECTED ) INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+
+					INTERSECTED = null;
+
+				}			
+
+				renderer.render( scene, camera );
+			}
+			window.addEventListener( 'pointermove', render );
 		</script>
 	</body>
 </html>
