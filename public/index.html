@@ -6,6 +6,12 @@
 		<!-- <link rel="stylesheet" href="css/style.css" type="text/css" /> -->
 		<style>
 			body { margin: 0; }
+			.lil-gui {
+				--font-size: 20px;
+				--input-font-size: 20px;
+				--widget-height: 40px;
+				--width: 400px;
+			}
 		</style>
 	</head>
 	
@@ -33,7 +39,7 @@
 			 * Start interaction implementation (JX)
 			*/
 			
-			// Three.js variables for render 
+			// Three.js variables for render
 			let renderer, camera, scene
 			let controls
 			const gui = new GUI()
@@ -1285,7 +1291,8 @@
 				const basicMaterial = new THREE.MeshBasicMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
 				const phongMaterial = new THREE.MeshPhongMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
 				const normalMaterial = new THREE.MeshNormalMaterial( {color: 0x44aa88,side: THREE.DoubleSide, wireframe: false} )
-				const material = normalMaterial
+				const lambertMaterial = new THREE.MeshLambertMaterial( { color:  0xff5fff } )
+				const material = lambertMaterial
 				// const colors = new Float32Array()
 				
 				// Get the mesh of body
@@ -1370,8 +1377,10 @@
 				camera.position.set( 0, 400, 300 )
 
 				// Scene
+				// scene = new THREE.Scene()
+				// scene.background = new THREE.Color( 'rgb(240, 240, 240)' )
 				scene = new THREE.Scene()
-				scene.background = new THREE.Color( 'rgb(240, 240, 240)' )
+				scene.background = new THREE.Color( 0xf0f0f0 )
 				
 				// Lights
 				scene.add( new THREE.AmbientLight( 0xFFFFFF, 0.1 ) )
@@ -1383,11 +1392,19 @@
 				// Floor
 				const floorGeometry = new THREE.PlaneGeometry( 2000, 2000, 100, 100 )
 				floorGeometry.rotateX( -Math.PI / 2 )
+				floorGeometry.name = "floor"
 				const floorMaterial = new THREE.MeshLambertMaterial( { color: 0x787878 } )
 				const floor = new THREE.Mesh( floorGeometry, floorMaterial )
+				
+				//
+				const gridHelper = new THREE.GridHelper( 2000, 20 );
+				scene.add( gridHelper );
+		
 				floor.position.set( 0, -60, 0 )
+				gridHelper.position.set( 0, -60, 0 )
 				floor.receiveShadow = true
 				scene.add(floor)
+				INTERSECTED = floor
 				
 				// Orbit controls
 				controls = new OrbitControls( camera, renderer.domElement )
@@ -1422,7 +1439,7 @@
 				
 				// Render three.js objects
 				controls.update()
-				// renderer.render( scene, camera )
+				renderer.render( scene, camera )
 			}
 			
 			function deflateTube( deflationTubes ) {
@@ -1548,16 +1565,29 @@
 						
 						for ( let i = 0; i<tubeNum; i++ ) {
 							const hits = raycaster.intersectObject( tubeVisualList[i] )
-							console.log(hits[0])
-							console.log(bodies)
-							console.log(visuals)
-						// Get the closest hit object
 							if (hits.length > 0) {
-								// const object = hits[0].object
-								// tubeVisualList.delete[i]
+								if(hits[ 0 ].object.geometry.name=="floor"){
+									hit.pop()
+								}
+							}
+							if (hits.length > 0) {
 								
-								console.log(tubeVisualList)
-								console.log(tubeBodiesList)
+								if (hits[0].object.parent.type == "Group"){
+									console.log(hits[0].object.parent)
+									hits[0].object.parent.traverse(function(obj){		
+																	
+											if (obj.type === 'Mesh') {
+											obj.geometry.dispose();
+											obj.material.dispose();
+										}
+									})
+									scene.remove(hits[0].object.parent);
+									console.log(tubeVisualList)	
+									console.log(tubeBodiesList)
+									console.log(bodies)	
+									console.log(visuals)
+									//还需删除connector 这么通过tube索引connector 和 判定需要删除connnect的条件
+								}
 							}
 						}
 					}
@@ -1572,31 +1602,67 @@
 				// Get the picking ray from the point
 				const raycaster = new THREE.Raycaster()
 				raycaster.setFromCamera( mouse, camera )
+				// console.log(INTERSECTED)
 
 				// 计算物体和射线的焦点
-				const intersects = raycaster.intersectObjects( scene.children,false );
-
+				const intersects = raycaster.intersectObjects( scene.children );
+				// console.log(intersects.length)
 				if ( intersects.length > 0 ) {
-
+					if(intersects[ 0 ].object.geometry.name=="floor"){
+							intersects.pop()
+						}
+				}
+				if ( intersects.length > 0 ) {
 					if ( INTERSECTED != intersects[ 0 ].object ) {
+						// console.log(intersects[ 0 ].object)
 
-						if ( INTERSECTED ) INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+						if ( INTERSECTED ) {
+								if (INTERSECTED.parent.type =="Group"){
+									INTERSECTED.parent.children.forEach( (mesh) => {
+										mesh.material.emissive.setHex(INTERSECTED.currentHex );
+								})
+								}
+								else{
+									INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+								}
+								
+							}
 
-						INTERSECTED = intersects[ 0 ].object;
-						INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
-						INTERSECTED.material.emissive.setHex( 0xff0000 );
+							INTERSECTED = intersects[ 0 ].object;
+							INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
+							if (INTERSECTED.parent.type =="Group"){
+								// console.log(INTERSECTED.parent.type)
+								INTERSECTED.parent.children.forEach( (mesh) => {
+									mesh.material.emissive.setHex( 0xff0000 );
+								})
+							}
+							else {
+								INTERSECTED.material.emissive.setHex( 0xff0000 );
+							}
 
 					}
 
 					} else {
 
-					if ( INTERSECTED ) INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+						if ( INTERSECTED ){
+							
+							if (INTERSECTED.parent.type =="Group"){
+									
+									INTERSECTED.parent.children.forEach( (mesh) => {
+										mesh.material.emissive.setHex(INTERSECTED.currentHex );
+									})
+							}
+							else{
+								INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+							}
+						
+						} 
 
-					INTERSECTED = null;
+						INTERSECTED = null;
 
 				}			
 
-				renderer.render( scene, camera );
+				// renderer.render( scene, camera );
 			}
 			window.addEventListener( 'pointermove', render );
 		</script>
