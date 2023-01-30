@@ -6,6 +6,12 @@
 		<!-- <link rel="stylesheet" href="css/style.css" type="text/css" /> -->
 		<style>
 			body { margin: 0; }
+			.lil-gui {
+				--font-size: 16px;
+				--input-font-size: 16px;
+				--widget-height: 40px;
+				--width: 300px;
+			}
 		</style>
 	</head>
 	
@@ -35,11 +41,11 @@
 			
 			// Three.js variables for render
 			let renderer, camera, scene
-			let controls, gui
+			let controls
 			
 			// Cannon.js variables for physical simulation
 			let world
-			let useGravity = false
+			let useGravity = true
 			
 			// Set hinge motor velocity that determines speed and direction
 			const initialHingeVelocity = 0
@@ -61,6 +67,20 @@
 			let inflationtubes = []
 			let connectorMeshes = []
 			let connectorBodies = []
+
+			const gui = new GUI()
+			var type = {
+				type : "edit",
+			}
+			var testObj = {
+				tube: "normal",
+				angle: 2,
+				group:1,
+			};
+			var testObj2 = {
+				type: "delete",
+			};
+			let INTERSECTED = 0
 			
 			initThree()
 			initCannon()
@@ -72,6 +92,102 @@
 			// inflateTube( inflationConstraints )
 			
 			initGUI()
+			
+			function initGUI() {
+				/**
+				 * User interface & design workflow
+				*/
+				var title = gui.add(type, "type", ['add', 'edit'])
+				var f = gui.addFolder('add');
+				f.add(testObj, "tube", ['normal', 'bending'])
+				f.add(testObj, "angle",0,3,1)
+				f.open();
+				var e = gui.addFolder('edit');
+				e.add(testObj2, "type", ['delete', 'group'])
+				e.open()
+			}
+			
+			// Mouse interactions
+			window.addEventListener( 'pointerdown', (event) => {
+				/**
+				 * Fired when a pointer becomes active state
+				 * Cast a ray from where the mouse is pointing to select a connector
+				 * Get 3D point from the client x y coordinates
+				*/
+				const mouse = new THREE.Vector2()
+				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
+        		mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
+				
+				// Get the picking ray from the point
+				const raycaster = new THREE.Raycaster()
+				raycaster.setFromCamera( mouse, camera )
+				
+				// Loop the data lists to get which object is selected
+				const connectorNum = connectorMeshes.length
+				const tubeNum = tubeVisualList.length
+				
+				if(type.type=='add') {			
+					for ( let i = 0; i<connectorNum; i++ ) {
+						const hits = raycaster.intersectObject( connectorMeshes[i] )
+						// Get the closest hit object
+						if (hits.length > 0) {
+							// const object = hits[0].object
+							if(testObj.tube== "bending" ) {
+								var tubeType = 1
+								var connectorIndex = i
+								var angleIndex = testObj.angle
+								var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+								tubeVisualList.push( tube.tubeVisual )
+								tubeBodiesList.push( tube.hingeBodies )
+								deflationTubes.push( tube )
+							}
+							if(testObj.tube== "normal" ) {
+								var tubeType = 0
+								var connectorIndex = i
+								var angleIndex = testObj.angle
+								var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+								tubeVisualList.push( tube.tubeVisual )
+								tubeBodiesList.push( tube.hingeBodies )
+								deflationTubes.push( tube )
+							}
+
+						}
+					}
+				}
+				
+				if(type.type=='edit') {
+					if(testObj2.type=="delete"){
+						
+						for ( let i = 0; i<tubeNum; i++ ) {
+							const hits = raycaster.intersectObject( tubeVisualList[i] )
+							if (hits.length > 0) {
+								if(hits[ 0 ].object.geometry.name=="floor"){
+									hit.pop()
+								}
+							}
+							if (hits.length > 0) {
+								
+								if (hits[0].object.parent.type == "Group"){
+									console.log(hits[0].object.parent)
+									hits[0].object.parent.traverse(function(obj){		
+																	
+											if (obj.type === 'Mesh') {
+											obj.geometry.dispose();
+											obj.material.dispose();
+										}
+									})
+									scene.remove(hits[0].object.parent);
+									console.log(tubeVisualList)	
+									console.log(tubeBodiesList)
+									console.log(bodies)	
+									console.log(visuals)
+									//还需删除connector 这么通过tube索引connector 和 判定需要删除connnect的条件
+								}
+							}
+						}
+					}
+				}
+			})
 			
 			function connectTube() {
 				/**
@@ -1366,13 +1482,17 @@
 				scene.add( directionalLight )
 				
 				// Floor
-				const floorGeometry = new THREE.PlaneGeometry( 2000, 2000, 100, 100 )
+				const floorGeometry = new THREE.PlaneGeometry( 5000, 5000, 100, 100 )
 				floorGeometry.rotateX( -Math.PI / 2 )
 				const floorMaterial = new THREE.MeshLambertMaterial( { color: 0x787878 } )
 				const floor = new THREE.Mesh( floorGeometry, floorMaterial )
 				floor.position.set( 0, -60, 0 )
 				floor.receiveShadow = true
-				scene.add(floor)
+				// scene.add(floor)
+				
+				const gridHelper = new THREE.GridHelper( 2000, 50 )
+				gridHelper.position.set( 0, -60, 0 )
+				scene.add( gridHelper )
 				
 				// Orbit controls
 				controls = new OrbitControls( camera, renderer.domElement )
@@ -1464,55 +1584,6 @@
 				camera.updateProjectionMatrix()
 				renderer.setSize( width, height )
 			}
-			
-			function initGUI() {
-				/**
-				 * User interface & design workflow
-				*/
-				let data = {
-					x: 1
-				}
-				const gui = new GUI
-				gui.add(data, "x", -5, -1, 0.01).onChange(() => {
-					// geometry.attributes.position.array[3] = data.x
-					// geometry.attributes.position.needsUpdate = true
-				})
-				gui.open();
-			}
-			
-			// Mouse interactions
-			window.addEventListener( 'pointerdown', (event) => {
-				/**
-				 * Fired when a pointer becomes active state
-				 * Cast a ray from where the mouse is pointing to select a connector
-				*/
-				// Get 3D point from the client x y coordinates
-				const mouse = new THREE.Vector2()
-				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
-        		mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
-				
-				// Get the picking ray from the point
-				const raycaster = new THREE.Raycaster()
-				raycaster.setFromCamera( mouse, camera )
-				
-				// Loop the connectorMeshes to get which object is selected
-				const connectorNum = connectorMeshes.length
-				for ( let i = 0; i<connectorNum; i++ ) {
-					const hits = raycaster.intersectObject( connectorMeshes[i] )
-					
-					// Get the closest hit object
-					if (hits.length > 0) {
-						// const object = hits[0].object
-						var tubeType = 1
-						var connectorIndex = i
-						var angleIndex = 3
-						var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-						tubeVisualList.push( tube.tubeVisual )
-						tubeBodiesList.push( tube.hingeBodies )
-						deflationTubes.push( tube )
-					}
-				}
-			})
 		</script>
 	</body>
 </html>
