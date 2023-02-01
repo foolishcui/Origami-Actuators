@@ -9,8 +9,8 @@
 			.lil-gui {
 				--font-size: 16px;
 				--input-font-size: 16px;
-				--widget-height: 40px;
-				--width: 300px;
+				--widget-height: 35px;
+				--width: 400px;
 			}
 		</style>
 	</head>
@@ -36,7 +36,7 @@
 			/**
 			 * Todo List:
 			 * Reset folding ratio to 0.75 (CZT)
-			 * Start interaction implementation (JX)
+			 * Actuators belong to the same group will be displayed with same color (JX)
 			*/
 			
 			// Three.js variables for render
@@ -69,17 +69,35 @@
 			let connectorBodies = []
 
 			const gui = new GUI()
-			var type = {
-				type : "edit",
+
+			const step1obj = {
+				'Type of actuator': 'linear actuator',
+				'Add a new actuator': function() { console.log('addtube') },
+				'Remove an actuator': function() { console.log('removetube') },
+				'Load mesh': function() { console.log('load mesh and convert edges to actuators') }
 			}
-			var testObj = {
-				tube: "normal",
-				angle: 2,
-				group:1,
-			};
-			var testObj2 = {
-				type: "delete",
-			};
+			
+			const step2obj = {
+				'Select actuators to create an air channel': function() {selectActuators()},
+				'Finish Selection': function() {},
+				'Air channel 1': '1 2 5',
+				'Air channel 2': '3 4 6 7'
+			}
+			
+			const step3obj = {
+				'Choose an air channel': 'Air channel 1',
+				'Actuation method': 'Deflation',
+				'Start time (s)': 0.5,
+				'End time (s)': 3.0,
+				'Add to sequence motion': function() {},
+				'Preview motion': true,
+				'Add loop control': true
+			}
+			
+			const step4obj = {
+				'Generate control code': function() {}
+			}
+			
 			let INTERSECTED = 0
 			
 			initThree()
@@ -88,7 +106,7 @@
 			connectTube()
 			animate()
 			
-			deflateTube( deflationTubes )
+			// deflateTube( deflationTubes )
 			// inflateTube( inflationConstraints )
 			
 			initGUI()
@@ -97,14 +115,33 @@
 				/**
 				 * User interface & design workflow
 				*/
-				var title = gui.add(type, "type", ['add', 'edit'])
-				var f = gui.addFolder('add');
-				f.add(testObj, "tube", ['normal', 'bending'])
-				f.add(testObj, "angle",0,3,1)
-				f.open();
-				var e = gui.addFolder('edit');
-				e.add(testObj2, "type", ['delete', 'group'])
-				e.open()
+				var step1 = gui.addFolder( 'Step 1: Create a Shape' )
+				step1.add( step1obj, 'Type of actuator', ['linear actuator', 'bending actuator'] )
+				step1.add( step1obj, 'Add a new actuator' )
+				step1.add( step1obj, 'Remove an actuator' )
+				step1.add( step1obj, 'Load mesh', 'Load mesh' )
+				step1.open()
+				
+				var step2 = gui.addFolder( 'Step 2: Group Actuators' )
+				step2.add( step2obj, 'Select actuators to create an air channel' )
+				step2.add( step2obj, 'Air channel 1' )
+				step2.add( step2obj, 'Air channel 2' )
+				step2.add( step2obj, 'Finish Selection')
+				step2.open()
+				
+				var step3 = gui.addFolder( 'Step 3: Add Actuation & Preview Motion' )
+				step3.add( step3obj, 'Choose an air channel', ['Air channel 1', 'Air channel 2'] )
+				step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] )
+				step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 )
+				step3.add( step3obj, 'End time (s)', 1, 5, 0.1 )
+				step3.add( step3obj, 'Add to sequence motion' )
+				step3.add( step3obj, 'Preview motion' )
+				step3.add( step3obj, 'Add loop control' )
+				step3.open()
+								
+				var step4 = gui.addFolder( 'Step 4: Assemble & Generate Control Code' )
+				step4.add( step4obj, 'Generate control code' )
+				step4.open()
 			}
 			
 			// Mouse interactions
@@ -126,7 +163,7 @@
 				const connectorNum = connectorMeshes.length
 				const tubeNum = tubeVisualList.length
 				
-				if(type.type=='add') {			
+				if ( type.type == 'add' ) {			
 					for ( let i = 0; i<connectorNum; i++ ) {
 						const hits = raycaster.intersectObject( connectorMeshes[i] )
 						// Get the closest hit object
@@ -141,7 +178,8 @@
 								tubeBodiesList.push( tube.hingeBodies )
 								deflationTubes.push( tube )
 							}
-							if(testObj.tube== "normal" ) {
+							
+							if( testObj.tube== "normal" ) {
 								var tubeType = 0
 								var connectorIndex = i
 								var angleIndex = testObj.angle
@@ -155,8 +193,8 @@
 					}
 				}
 				
-				if(type.type=='edit') {
-					if(testObj2.type=="delete"){
+				if ( type.type == 'edit' ) {
+					if( testObj2.type=="delete" ){
 						
 						for ( let i = 0; i<tubeNum; i++ ) {
 							const hits = raycaster.intersectObject( tubeVisualList[i] )
@@ -1468,7 +1506,7 @@
 				
 				// Camera
 				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 )
-				camera.position.set( 0, 400, 300 )
+				camera.position.set( 0, 500, 400 )
 
 				// Scene
 				scene = new THREE.Scene()
@@ -1584,6 +1622,78 @@
 				camera.updateProjectionMatrix()
 				renderer.setSize( width, height )
 			}
+			
+			function render() {
+				const mouse = new THREE.Vector2()
+				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
+        		mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
+				
+				// Get the picking ray from the point
+				const raycaster = new THREE.Raycaster()
+				raycaster.setFromCamera( mouse, camera )
+				// console.log(INTERSECTED)
+
+				// 计算物体和射线的焦点
+				const intersects = raycaster.intersectObjects( scene.children );
+				// console.log(intersects.length)
+				if ( intersects.length > 0 ) {
+					if(intersects[ 0 ].object.geometry.name=="floor"){
+							intersects.pop()
+						}
+				}
+				if ( intersects.length > 0 ) {
+					if ( INTERSECTED != intersects[ 0 ].object ) {
+						// console.log(intersects[ 0 ].object)
+
+						if ( INTERSECTED ) {
+								if (INTERSECTED.parent.type =="Group"){
+									INTERSECTED.parent.children.forEach( (mesh) => {
+										mesh.material.emissive.setHex(INTERSECTED.currentHex );
+								})
+								}
+								else{
+									INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+								}
+								
+							}
+
+							INTERSECTED = intersects[ 0 ].object;
+							INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
+							if (INTERSECTED.parent.type =="Group"){
+								// console.log(INTERSECTED.parent.type)
+								INTERSECTED.parent.children.forEach( (mesh) => {
+									mesh.material.emissive.setHex( 0xff0000 );
+								})
+							}
+							else {
+								INTERSECTED.material.emissive.setHex( 0xff0000 );
+							}
+
+					}
+
+					} else {
+
+						if ( INTERSECTED ){
+							
+							if (INTERSECTED.parent.type =="Group"){
+									
+									INTERSECTED.parent.children.forEach( (mesh) => {
+										mesh.material.emissive.setHex(INTERSECTED.currentHex );
+									})
+							}
+							else{
+								INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+							}
+						
+						} 
+
+						INTERSECTED = null;
+
+				}			
+
+				// renderer.render( scene, camera );
+			}
+			window.addEventListener( 'pointermove', render );
 		</script>
 	</body>
 </html>
