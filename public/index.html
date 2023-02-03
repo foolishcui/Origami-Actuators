@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 	<head>
@@ -7,9 +8,9 @@
 		<style>
 			body { margin: 0; }
 			.lil-gui {
-				--font-size: 20px;
-				--input-font-size: 20px;
-				--widget-height: 40px;
+				--font-size: 16px;
+				--input-font-size: 16px;
+				--widget-height: 35px;
 				--width: 400px;
 			}
 		</style>
@@ -36,16 +37,16 @@
 			/**
 			 * Todo List:
 			 * Reset folding ratio to 0.75 (CZT)
-			 * Start interaction implementation (JX)
+			 * Actuators belong to the same group will be displayed with same color (JX)
 			*/
 			
 			// Three.js variables for render
 			let renderer, camera, scene
 			let controls
-			const gui = new GUI()
+			
 			// Cannon.js variables for physical simulation
 			let world
-			let useGravity = false
+			let useGravity = true
 			
 			// Set hinge motor velocity that determines speed and direction
 			const initialHingeVelocity = 0
@@ -55,7 +56,6 @@
 			const unFoldingDuration = 3000
 			const disSquMin = 180
 			const disSquMax = 720
-
 			
 			// Keep in sync the bodies with the visuals, they always have the same length
 			let bodies = []
@@ -68,31 +68,248 @@
 			let inflationtubes = []
 			let connectorMeshes = []
 			let connectorBodies = []
-			var type = {
-				type : "edit",
+
+			let airchannel = [] //加入空气分组
+			let color = [] //每个分组颜色
+			airchannel.push("Airchannel 1")
+			airchannel.push("Airchannel 2")
+			color.push(color16())
+			color.push(color16())
+			console.log(color)
+			const gui = new GUI()
+			var step1 = gui.addFolder( 'Step 1: Create a Shape' )
+			var step2 = gui.addFolder( 'Step 2: Group Actuators' )
+
+			
+			var controltype = {
+				'type': "none",
 			}
-			var testObj = {
-				tube: "normal",
-				angle: 2,
-				group:1,
-			};
+			
+			const step1obj = {
+				'Type of actuator': 'linear actuator',
+				'Add a new actuator': function() { console.log('addtube') },
+				'Remove an actuator': function() { console.log('removetube') },
+				'Load mesh': function() { console.log('load mesh and convert edges to actuators') }
+			}
+			
+			const step4obj = {
+				'Generate control code': function() {}
+			}
+			const step3obj = {
+				'Choose an air channel': 'Air channel 1',
+				'Actuation method': 'Deflation',
+				'Start time (s)': 0.5,
+				'End time (s)': 3.0,
+				'Add to sequence motion': function() {},
+				'Preview motion': true,
+				'Add loop control': true,
+				'finish': function() {//按钮生成下一步界面
+					var step4 = gui.addFolder( 'Step 4: Assemble & Generate Control Code' )
+					step4.add( step4obj, 'Generate control code' )
+					step4.open()
+				}
+			}
+			
+			var step2obj = {
+				// 'Select actuators to create an air channel': function() {selectActuators()},
+				'Airchannel 1': function() {
+					controltype.type = "Airchannel 1"
+				},
+				'Airchannel 2': function() {
+					controltype.type = "Airchannel 2"
+				},
+				//按钮添加分组
+				'finish' : function(){//完成分组按钮此时生成第三步界面
+					controltype.type = "finish"
+					var step3 = gui.addFolder( 'Step 3: Add Actuation & Preview Motion' )
+					step3.add( step3obj, 'Choose an air channel', airchannel )
+					step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] )
+					step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 )
+					step3.add( step3obj, 'End time (s)', 1, 5, 0.1 )
+					step3.add( step3obj, 'Add to sequence motion' )
+					step3.add( step3obj, 'Preview motion' )
+					step3.add( step3obj, 'Add loop control' )
+					step3.add( step3obj, 'finish')
+					step3.open()
+				},
+				'+' : function(){//空气分组
+					var num = -1
+					for (var i in step2obj){
+						num++
+					}
+					var str = num + ''
+					console.log(str)
+					step2obj["Airchannel "+ str] = function(){
+						controltype.type = "Airchannel "+ str
+					}
+					// step2obj.prototype.name = 'airchannel3'
+					step2.add( step2obj, "Airchannel "+ str )
+					airchannel.push("Airchannel "+ str)
+					color.push(color16())
+					console.log(airchannel)	
+				}
+			}
+			
 
-			var testObj2 = {
-				type: "delete",
-			};
-			let INTERSECTED =0
 
+
+			
+			let INTERSECTED = 0
+			
 			initThree()
 			initCannon()
 			
 			connectTube()
-			initGUI()
 			animate()
-
-			deflateTube( deflationTubes )
+			
+			// deflateTube( deflationTubes )
 			// inflateTube( inflationConstraints )
 			
-	
+			initGUI()
+
+			function inGroupmode(mode){//判断是否在分组模式
+				var flag = 0
+				for (var i in step2obj){
+						if(i==mode){
+							flag = 1
+						}
+					}
+				return flag
+			}
+
+			function color16(){//十六进制颜色随机
+				var color =Math.floor(Math.random()*16777215)
+				return color;
+			}
+
+			function initGUI() {
+				/**
+				 * User interface & design workflow
+				*/				
+				step1.add( step1obj, 'Type of actuator', ['linear actuator', 'bending actuator'] )
+				step1.add( step1obj, 'Add a new actuator' )
+				step1.add( step1obj, 'Remove an actuator' )
+				step1.add( step1obj, 'Load mesh', 'Load mesh' )
+				step1.open()
+				
+				step2.add( step2obj, '+' )
+				step2.add( step2obj, 'finish' )
+				step2.add( step2obj, 'Airchannel 1' )
+				step2.add( step2obj, 'Airchannel 2' )
+				step2.open()
+				
+			}
+			
+			// Mouse interactions
+			window.addEventListener( 'pointerdown', (event) => {
+				/**
+				 * Fired when a pointer becomes active state
+				 * Cast a ray from where the mouse is pointing to select a connector
+				 * Get 3D point from the client x y coordinates
+				*/
+				const mouse = new THREE.Vector2()
+				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
+        		mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
+				
+				// Get the picking ray from the point
+				const raycaster = new THREE.Raycaster()
+				raycaster.setFromCamera( mouse, camera )
+				
+				// Loop the data lists to get which object is selected
+				const connectorNum = connectorMeshes.length
+				const tubeNum = tubeVisualList.length
+				
+				// if ( type.type == 'add' ) {			
+				// 	for ( let i = 0; i<connectorNum; i++ ) {
+				// 		const hits = raycaster.intersectObject( connectorMeshes[i] )
+				// 		// Get the closest hit object
+				// 		if (hits.length > 0) {
+				// 			// const object = hits[0].object
+				// 			if(testObj.tube== "bending" ) {
+				// 				var tubeType = 1
+				// 				var connectorIndex = i
+				// 				var angleIndex = testObj.angle
+				// 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				// 				tubeVisualList.push( tube.tubeVisual )
+				// 				tubeBodiesList.push( tube.hingeBodies )
+				// 				deflationTubes.push( tube )
+				// 			}
+							
+				// 			if( testObj.tube== "normal" ) {
+				// 				var tubeType = 0
+				// 				var connectorIndex = i
+				// 				var angleIndex = testObj.angle
+				// 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				// 				tubeVisualList.push( tube.tubeVisual )
+				// 				tubeBodiesList.push( tube.hingeBodies )
+				// 				deflationTubes.push( tube )
+				// 			}
+
+				// 		}
+				// 	}
+				// }
+				
+				if ( controltype.type == 'edit' ) {
+					if( testObj2.type=="delete" ){
+						
+						for ( let i = 0; i<tubeNum; i++ ) {
+							const hits = raycaster.intersectObject( tubeVisualList[i] )
+							if (hits.length > 0) {
+								if(hits[ 0 ].object.name=="floor"){
+									hit.pop()
+								}
+							}
+							if (hits.length > 0) {
+								
+								if (hits[0].object.parent.type == "Group"){
+									console.log(hits[0].object.parent)
+									hits[0].object.parent.traverse(function(obj){		
+																	
+											if (obj.type === 'Mesh') {
+											obj.geometry.dispose();
+											obj.material.dispose();
+										}
+									})
+									scene.remove(hits[0].object.parent);
+									console.log(tubeVisualList)	
+									console.log(tubeBodiesList)
+									console.log(bodies)	
+									console.log(visuals)
+									//还需删除connector 这么通过tube索引connector 和 判定需要删除connnect的条件
+								}
+							}
+						}
+					}
+				}
+
+				//分组功能 通过改变tube.parent.name实现索引分组 //body未完成
+				if (inGroupmode(controltype.type)){
+					
+					for ( let i = 0; i<tubeNum; i++ ) {
+							const hits = raycaster.intersectObject( tubeVisualList[i] )
+							if (hits.length > 0) {
+								if(hits[ 0 ].object.name=="floor"){
+									hit.splice(0,hit.length)
+								}
+							}
+							if (hits.length > 0) {
+								if (hits[0].object.parent.type == "Group"){
+									if(hits[0].object.parent.name != controltype.type){
+										hits[0].object.parent.name = controltype.type
+										console.log(hits[0].object.parent)
+										break;
+									}
+									if(hits[0].object.parent.name == controltype.type){
+										hits[0].object.parent.name=''
+										console.log(hits[0].object.parent)
+										break;
+									}	
+								}
+							}							
+					}
+				}
+				
+			})
 			
 			function connectTube() {
 				/**
@@ -130,6 +347,23 @@
 				tubeVisualList.push( tube.tubeVisual )
 				tubeBodiesList.push( tube.hingeBodies )
 				deflationTubes.push( tube )
+
+				var tubeType = 0
+				var connectorIndex = 1
+				var angleIndex = 0
+				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				tubeVisualList.push( tube.tubeVisual )
+				tubeBodiesList.push( tube.hingeBodies )
+				deflationTubes.push( tube )
+
+				var tubeType = 0
+				var connectorIndex = 2
+				var angleIndex = 0
+				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				tubeVisualList.push( tube.tubeVisual )
+				tubeBodiesList.push( tube.hingeBodies )
+				deflationTubes.push( tube )
+		
 			}
 			
 			function addMiuraTube( tubeType, connectorIndex, angleIndex ) {
@@ -1290,7 +1524,8 @@
 				// Materials
 				const basicMaterial = new THREE.MeshBasicMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
 				const phongMaterial = new THREE.MeshPhongMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
-				const normalMaterial = new THREE.MeshNormalMaterial( {color: 0x44aa88,side: THREE.DoubleSide, wireframe: false} )
+				const normalMaterial = new THREE.MeshNormalMaterial( {side: THREE.DoubleSide, wireframe: false} )
+
 				const lambertMaterial = new THREE.MeshLambertMaterial( { color:  0xff5fff } )
 				const material = lambertMaterial
 				// const colors = new Float32Array()
@@ -1374,13 +1609,11 @@
 				
 				// Camera
 				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 )
-				camera.position.set( 0, 400, 300 )
+				camera.position.set( 0, 500, 400 )
 
 				// Scene
-				// scene = new THREE.Scene()
-				// scene.background = new THREE.Color( 'rgb(240, 240, 240)' )
 				scene = new THREE.Scene()
-				scene.background = new THREE.Color( 0xf0f0f0 )
+				scene.background = new THREE.Color( 'rgb(240, 240, 240)' )
 				
 				// Lights
 				scene.add( new THREE.AmbientLight( 0xFFFFFF, 0.1 ) )
@@ -1390,21 +1623,19 @@
 				scene.add( directionalLight )
 				
 				// Floor
-				const floorGeometry = new THREE.PlaneGeometry( 2000, 2000, 100, 100 )
+				const floorGeometry = new THREE.PlaneGeometry( 5000, 5000, 100, 100 )
 				floorGeometry.rotateX( -Math.PI / 2 )
-				floorGeometry.name = "floor"
 				const floorMaterial = new THREE.MeshLambertMaterial( { color: 0x787878 } )
 				const floor = new THREE.Mesh( floorGeometry, floorMaterial )
-				
-				//
-				const gridHelper = new THREE.GridHelper( 2000, 20 );
-				scene.add( gridHelper );
-		
+				floor.name = "floor"
 				floor.position.set( 0, -60, 0 )
-				gridHelper.position.set( 0, -60, 0 )
 				floor.receiveShadow = true
-				scene.add(floor)
-				INTERSECTED = floor
+				// scene.add(floor)
+				
+				const gridHelper = new THREE.GridHelper( 2000, 50 )
+				gridHelper.position.set( 0, -60, 0 )
+				gridHelper.name = "floor"
+				scene.add( gridHelper )
 				
 				// Orbit controls
 				controls = new OrbitControls( camera, renderer.domElement )
@@ -1420,6 +1651,7 @@
 			
 			function animate() {
 				requestAnimationFrame( animate )
+				
 				// Step the physical simulation forward
 				world.fixedStep()
 				
@@ -1496,105 +1728,30 @@
 				renderer.setSize( width, height )
 			}
 			
-			function initGUI() {
-				/**
-				 * User interface & design workflow
-				*/
-				var title = gui.add(type, "type", ['add', 'edit'])
-				var f = gui.addFolder('add');
-				f.add(testObj, "tube", ['normal', 'bending'])
-				f.add(testObj, "angle",0,3,1)
-				f.open();
-				var e = gui.addFolder('edit');
-				e.add(testObj2, "type", ['delete', 'group'])
-				e.open()
-			}
-			
-			// Mouse interactions
-			window.addEventListener( 'pointerdown', (event) => {
-				/**
-				 * Fired when a pointer becomes active state
-				 * Cast a ray from where the mouse is pointing to select a connector
-				*/
-				// Get 3D point from the client x y coordinates
-				const mouse = new THREE.Vector2()
-				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
-        		mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
-				
-				// Get the picking ray from the point
-				const raycaster = new THREE.Raycaster()
-				raycaster.setFromCamera( mouse, camera )
-				
-				// Loop the connectorMeshes to get which object is selected
-				const connectorNum = connectorMeshes.length
+			function render() {
+				//hlight 不同的airchannel
 
-				const tubeNum = tubeVisualList.length
-
-				if(type.type=='add'){					
-					for ( let i = 0; i<connectorNum; i++ ) {
-						const hits = raycaster.intersectObject( connectorMeshes[i] )
-						// Get the closest hit object
-						if (hits.length > 0) {
-							// const object = hits[0].object
-							if(testObj.tube=="bending"){
-								var tubeType = 1
-								var connectorIndex = i
-								var angleIndex = testObj.angle
-								var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-								tubeVisualList.push( tube.tubeVisual )
-								tubeBodiesList.push( tube.hingeBodies )
-								deflationTubes.push( tube )
-							}
-							if(testObj.tube=="normal"){
-								var tubeType = 0
-								var connectorIndex = i
-								var angleIndex = testObj.angle
-								var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-								tubeVisualList.push( tube.tubeVisual )
-								tubeBodiesList.push( tube.hingeBodies )
-								deflationTubes.push( tube )
-							}
-
+				if (inGroupmode(controltype.type)){
+					var a = parseInt(controltype.type.substr(-1))-1
+					// console.log(color[a])
+					tubeVisualList.forEach((object)=>{
+						if(object.name == controltype.type){							
+							object.children.forEach( (mesh) => {
+								mesh.material.emissive.setHex(color[a]);
+								// console.log(object.children)
+							})
 						}
-					}
+						else{
+							object.children.forEach( (mesh) => {
+								mesh.material.emissive.setHex(0xff5fff );
+								// console.log(object.children)
+							})
+						}
+					})
 				}
 
-				if(type.type=='edit'){
-					
-					if(testObj2.type=="delete"){
-						
-						for ( let i = 0; i<tubeNum; i++ ) {
-							const hits = raycaster.intersectObject( tubeVisualList[i] )
-							if (hits.length > 0) {
-								if(hits[ 0 ].object.geometry.name=="floor"){
-									hit.pop()
-								}
-							}
-							if (hits.length > 0) {
-								
-								if (hits[0].object.parent.type == "Group"){
-									console.log(hits[0].object.parent)
-									hits[0].object.parent.traverse(function(obj){		
-																	
-											if (obj.type === 'Mesh') {
-											obj.geometry.dispose();
-											obj.material.dispose();
-										}
-									})
-									scene.remove(hits[0].object.parent);
-									console.log(tubeVisualList)	
-									console.log(tubeBodiesList)
-									console.log(bodies)	
-									console.log(visuals)
-									//还需删除connector 这么通过tube索引connector 和 判定需要删除connnect的条件
-								}
-							}
-						}
-					}
-				}
 
-			})
-			function render(){
+				// 指针放上去highlight
 				const mouse = new THREE.Vector2()
 				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
         		mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
@@ -1603,13 +1760,12 @@
 				const raycaster = new THREE.Raycaster()
 				raycaster.setFromCamera( mouse, camera )
 				// console.log(INTERSECTED)
-
 				// 计算物体和射线的焦点
 				const intersects = raycaster.intersectObjects( scene.children );
 				// console.log(intersects.length)
 				if ( intersects.length > 0 ) {
-					if(intersects[ 0 ].object.geometry.name=="floor"){
-							intersects.pop()
+					if(intersects[ 0 ].object.name=="floor"){
+							intersects.splice(0,intersects.length)
 						}
 				}
 				if ( intersects.length > 0 ) {
@@ -1661,7 +1817,7 @@
 						INTERSECTED = null;
 
 				}			
-
+				
 				// renderer.render( scene, camera );
 			}
 			window.addEventListener( 'pointermove', render );
