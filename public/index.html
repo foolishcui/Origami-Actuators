@@ -13,6 +13,9 @@
 				--widget-height: 35px;
 				--width: 400px;
 			}
+			.control-inactive button {
+				color: #888;
+			}
 		</style>
 	</head>
 	
@@ -71,15 +74,20 @@
 
 			let airchannel = [] //加入空气分组
 			let color = [] //每个分组颜色
+			let Button = [] //用于界面交互
+
 			airchannel.push("Airchannel 1")
 			airchannel.push("Airchannel 2")
 			color.push(color16())
 			color.push(color16())
-			console.log(color)
+			// console.log(color)
 			const gui = new GUI()
 			var step1 = gui.addFolder( 'Step 1: Create a Shape' )
 			var step2 = gui.addFolder( 'Step 2: Group Actuators' )
-
+			var step3 = gui.addFolder( 'Step 3: Add Actuation & Preview Motion' )
+			var step4 = gui.addFolder( 'Step 4: Assemble & Generate Control Code' )
+			step3.hide()
+			step4.hide()
 			
 			var controltype = {
 				'type': "none",
@@ -104,9 +112,9 @@
 				'Preview motion': true,
 				'Add loop control': true,
 				'finish': function() {//按钮生成下一步界面
-					var step4 = gui.addFolder( 'Step 4: Assemble & Generate Control Code' )
 					step4.add( step4obj, 'Generate control code' )
 					step4.open()
+					step4.show()
 				}
 			}
 			
@@ -114,46 +122,82 @@
 				// 'Select actuators to create an air channel': function() {selectActuators()},
 				'Airchannel 1': function() {
 					controltype.type = "Airchannel 1"
+					Button.forEach((button)=>{
+						button.domElement.classList.add( 'control-inactive' );
+					})
+					Button[0].domElement.classList.remove( 'control-inactive' );
 				},
 				'Airchannel 2': function() {
 					controltype.type = "Airchannel 2"
+					Button.forEach((button)=>{
+						button.domElement.classList.add( 'control-inactive' );
+					})
+					Button[1].domElement.classList.remove( 'control-inactive' );
 				},
 				//按钮添加分组
 				'finish' : function(){//完成分组按钮此时生成第三步界面
-					controltype.type = "finish"
-					var step3 = gui.addFolder( 'Step 3: Add Actuation & Preview Motion' )
-					step3.add( step3obj, 'Choose an air channel', airchannel )
-					step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] )
-					step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 )
-					step3.add( step3obj, 'End time (s)', 1, 5, 0.1 )
-					step3.add( step3obj, 'Add to sequence motion' )
-					step3.add( step3obj, 'Preview motion' )
-					step3.add( step3obj, 'Add loop control' )
-					step3.add( step3obj, 'finish')
-					step3.open()
+					controltype.type = "step2finish"	
+					Button_f.disable()
+					air.options( airchannel );
+					Button.forEach((button)=>{
+						button.disable()
+					})
 				},
 				'+' : function(){//空气分组
+					Button_f.enable()
+
 					var num = -1
 					for (var i in step2obj){
 						num++
 					}
 					var str = num + ''
+					var a = parseInt(controltype.type.substr(-1))-1
 					console.log(str)
 					step2obj["Airchannel "+ str] = function(){
 						controltype.type = "Airchannel "+ str
-					}
+						Button.forEach((button)=>{
+							button.domElement.classList.add( 'control-inactive' );
+						})
+							Button[num-1].domElement.classList.remove( 'control-inactive' );
+						}
 					// step2obj.prototype.name = 'airchannel3'
-					step2.add( step2obj, "Airchannel "+ str )
+					const button = step2.add( step2obj, "Airchannel "+ str )
+					Button.push(button)
+					Button.forEach((button)=>{
+						button.domElement.classList.add( 'control-inactive' );
+					})
+					Button[a].domElement.classList.remove( 'control-inactive' );
 					airchannel.push("Airchannel "+ str)
 					color.push(color16())
-					console.log(airchannel)	
+					// console.log(airchannel)	
 				}
 			}
-			
+				step1.add( step1obj, 'Type of actuator', ['linear actuator', 'bending actuator'] )
+				step1.add( step1obj, 'Add a new actuator' )
+				step1.add( step1obj, 'Remove an actuator' )
+				step1.add( step1obj, 'Load mesh', 'Load mesh' )
+				step1.open()
+				
+				step2.add( step2obj, '+' )
+				const Button_f = step2.add( step2obj, 'finish' )
+				const Button1 = step2.add( step2obj, 'Airchannel 1' )
+				const Button2 = step2.add( step2obj, 'Airchannel 2' )
+				Button.push(Button1)
+				Button.push(Button2)
+				step2.open()
 
-
-
-			
+				let air = step3.add( step3obj, 'Choose an air channel', airchannel )
+				step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] )
+				step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 )
+				step3.add( step3obj, 'End time (s)', 1, 5, 0.1 )
+				step3.add( step3obj, 'Add to sequence motion' )
+				step3.add( step3obj, 'Preview motion' )
+				step3.add( step3obj, 'Add loop control' )
+				step3.add( step3obj, 'finish')
+				step3.open()
+				step3.show()
+				
+						
 			let INTERSECTED = 0
 			
 			initThree()
@@ -186,17 +230,7 @@
 				/**
 				 * User interface & design workflow
 				*/				
-				step1.add( step1obj, 'Type of actuator', ['linear actuator', 'bending actuator'] )
-				step1.add( step1obj, 'Add a new actuator' )
-				step1.add( step1obj, 'Remove an actuator' )
-				step1.add( step1obj, 'Load mesh', 'Load mesh' )
-				step1.open()
-				
-				step2.add( step2obj, '+' )
-				step2.add( step2obj, 'finish' )
-				step2.add( step2obj, 'Airchannel 1' )
-				step2.add( step2obj, 'Airchannel 2' )
-				step2.open()
+
 				
 			}
 			
