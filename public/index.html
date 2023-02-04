@@ -36,7 +36,6 @@
 			/**
 			 * Todo List:
 			 * Step1: Reset folding ratio to 0.75 (CZT)
-			 * Step2,3: Actuators belong to the same group will be displayed with same color (JX)
 			 * Step4: Arduino communication
 			*/
 			
@@ -54,16 +53,19 @@
 			const foldingDuration = 1600
 			const unfoldingVelocity = - Math.PI / 4
 			const unFoldingDuration = 3000
-			const disSquMin = 180
-			const disSquMax = 720
+			const disSquMinLinear = 150
+			const disSquMinBending = 60
+			const disSquMaxLinear = 720
 			
 			// Keep in sync the bodies with the visuals, they always have the same length
 			let bodies = []
 			let visuals = []
 			
 			// User interaction variables
+			let tubeInfoList = []
 			let tubeVisualList = []	// record the order of tubes in Three.js
 			let tubeBodiesList = [] // record the order of tubes in Cannon.js
+			let tubeConstraintList = []
 			let tubeTypeList = []   // record the type of tubes in order
 			let deflationLinearActuators = []  // lienar actuators needed to be deflated
 			let deflationBendingActuators = [] // bending actuators needed to be deflated
@@ -71,18 +73,20 @@
 			let connectorMeshes = []
 			let connectorBodies = []
 			
+			// GUI settings
 			const gui = new GUI()
+			var controlType = null
 			
 			const step1obj = {
 				'Type of actuator': 'linear actuator',
-				'Add a new actuator': function() { addNewActuator() },
-				'Remove an actuator': function() { console.log('removetube') },
-				'Rotate the bending direction 90 degrees': function() {},
-				'Load mesh': function() { console.log('load mesh and convert edges to actuators') }
+				'Add a new actuator': function() { controlType = 'Add a new actuator' },
+				'Remove an actuator': function() { controlType = 'Remove an actuator' },
+				'Rotate the bending direction by 90 degrees': function() { controlType = 'Rotate the bending direction by 90 degrees' },
+				'Load mesh': function() { controlType = 'Load mesh' }
 			}
 			
 			const step2obj = {
-				'Select actuators to create an air channel': function() {selectActuators()},
+				'Select actuators to create an air channel': function() {},
 				'Finish Selection': function() {},
 				'Air channel 1': '1 2 5',
 				'Air channel 2': '3 4 6 7'
@@ -94,7 +98,7 @@
 				'Start time (s)': 0.5,
 				'End time (s)': 3.0,
 				'Add to sequence motion': function() {},
-				'Preview motion': true,
+				'Preview motion': false,
 				'Add loop control': true
 			}
 			
@@ -102,8 +106,6 @@
 				'Generate control code': function() {}
 			}
 			
-			let selectedConnectorIndex
-			let selectedTubeIndex
 			let INTERSECTED = 0
 			
 			initThree()
@@ -111,10 +113,6 @@
 			
 			initializeDefaultActuators()
 			animate()
-			
-			deflateLinearActuator( deflationLinearActuators )
-			deflateBendingActuators( deflationBendingActuators )
-			// inflateTube( inflationLinearActuators )
 			
 			initGUI()
 			
@@ -126,7 +124,7 @@
 				step1.add( step1obj, 'Type of actuator', ['linear actuator', 'bending actuator'] )
 				step1.add( step1obj, 'Add a new actuator' )
 				step1.add( step1obj, 'Remove an actuator' )
-				step1.add( step1obj, 'Rotate the bending direction 90 degrees')
+				step1.add( step1obj, 'Rotate the bending direction by 90 degrees')
 				// step1.add( step1obj, 'Load mesh', 'Load mesh' )
 				step1.open()
 				
@@ -144,7 +142,7 @@
 				step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 )
 				step3.add( step3obj, 'End time (s)', 1, 5, 0.1 )
 				step3.add( step3obj, 'Add to sequence motion' )
-				step3.add( step3obj, 'Preview motion' )
+				step3.add( step3obj, 'Preview motion' ).onChange( previewMotion )
 				step3.add( step3obj, 'Add loop control' )
 				step3.open()
 				
@@ -153,101 +151,112 @@
 				step4.open()
 			}
 			
-			// User interface functions
-			function addNewActuator() {
+			// User interactions
+			window.addEventListener( 'pointerdown', (event) => {
 				/**
 				 * Fired when a pointer becomes active state
 				 * Cast a ray from where the mouse is pointing to select a connector
 				 * Get 3D point from the client x y coordinates
 				*/
-				window.addEventListener( 'pointerdown', (event) => {
-					const mouse = new THREE.Vector2()
-					mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
-					mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
-					
-					// Get the picking ray from the point
-					const raycaster = new THREE.Raycaster()
-					raycaster.setFromCamera( mouse, camera )
-					
-					// Loop the data lists to get which object is selected
-					const connectorNum = connectorMeshes.length
-					const tubeNum = tubeVisualList.length
-					
-					// Get selected connector by user
-					for ( let i = 0; i < connectorNum; i++ ) {
-						const hits = raycaster.intersectObject( connectorMeshes[i] )
-						// Get the closest hit object
-						if ( hits.length > 0 ) {
-							// const object = hits[0].object
-							selectedConnectorIndex = i
-						}
-					}
-					
-					// Get selected tube by user
-					for ( let i = 0; i < tubeNum; i++ ) {
-						const hits = raycaster.intersectObject( tubeVisualList[i] )
-						if ( hits.length > 0 ) {
-							selectedTubeIndex = i
-						}
-					}
-					// console.log(selectedConnectorIndex, selectedTubeIndex)
-					
-					if ( step1obj['Type of actuator'] == 'linear actuator' ) {
-						var tubeType = 0
-					} else if ( step1obj['Type of actuator'] == 'bending actuator' ) {
-						var tubeType = 1
-					}
-					
-					if ( selectedConnectorIndex != undefined ) {
-						console.log("Add a " + step1obj['Type of actuator'])
-						
-						var angleIndex = 3
-						var tube = addMiuraTube( tubeType, selectedConnectorIndex, angleIndex )
-						tubeVisualList.push( tube.tubeVisual )
-						tubeBodiesList.push( tube.hingeBodies )
-						tubeTypeList.push( tubeType )
-
-						deflationBendingActuators.push( tube )
-						deflateBendingActuators( deflationBendingActuators )
-						
-						selectedConnectorIndex = undefined
-					} else {
-						console.log('No connector is selected for adding new actuator')
-					}
-				})
+				const mouse = new THREE.Vector2()
+				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
+				mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
 				
-				// if ( type.type == 'edit' ) {
-				// 	if( testObj2.type=="delete" ){
-						
-				// 		for ( let i = 0; i<tubeNum; i++ ) {
-				// 			const hits = raycaster.intersectObject( tubeVisualList[i] )
-				// 			if (hits.length > 0) {
-				// 				if(hits[ 0 ].object.geometry.name=="floor"){
-				// 					hit.pop()
-				// 				}
-				// 			}
-				// 			if (hits.length > 0) {
-								
-				// 				if (hits[0].object.parent.type == "Group"){
-				// 					console.log(hits[0].object.parent)
-				// 					hits[0].object.parent.traverse(function(obj){		
-																	
-				// 							if (obj.type === 'Mesh') {
-				// 							obj.geometry.dispose();
-				// 							obj.material.dispose();
-				// 						}
-				// 					})
-				// 					scene.remove(hits[0].object.parent);
-				// 					console.log(tubeVisualList)	
-				// 					console.log(tubeBodiesList)
-				// 					console.log(bodies)	
-				// 					console.log(visuals)
-				// 					//还需删除connector 这么通过tube索引connector 和 判定需要删除connnect的条件
-				// 				}
-				// 			}
-				// 		}
-				// 	}
-				// }
+				// Get the picking ray from the point
+				const raycaster = new THREE.Raycaster()
+				raycaster.setFromCamera( mouse, camera )
+				
+				let selectedConnectorIndex
+				let selectedTubeIndex
+				
+				// Loop the data lists to get which object is selected by the user
+				for ( let i = 0; i < connectorMeshes.length; i++ ) {
+					const hits = raycaster.intersectObject( connectorMeshes[i] )
+					// Get the closest hit object
+					if ( hits.length > 0 ) {
+						// const object = hits[0].object
+						selectedConnectorIndex = i
+					}
+				}
+				
+				// Get selected tube by the user
+				for ( let i = 0; i < tubeVisualList.length; i++ ) {
+					const hits = raycaster.intersectObject( tubeVisualList[i] )
+					if ( hits.length > 0 ) {
+						selectedTubeIndex = i
+					}
+				}
+				
+				// Divide mouse selections based on the variable controlType
+				if ( controlType == 'Add a new actuator' ) {
+					addNewActuator( selectedConnectorIndex )
+				}
+				
+				if ( controlType == 'Remove an actuator' ) {
+					removeActuator( selectedTubeIndex )
+				}
+				
+				// Clear the last selection
+				selectedConnectorIndex = undefined
+				selectedTubeIndex = undefined
+			})
+			
+			// User interface functions
+			function addNewActuator( selectedConnectorIndex ) {
+				if ( step1obj['Type of actuator'] == 'linear actuator' ) {
+					var tubeType = 0
+				} else if ( step1obj['Type of actuator'] == 'bending actuator' ) {
+					var tubeType = 1
+				}
+				
+				if ( selectedConnectorIndex != undefined ) {
+					console.log("Add a " + step1obj['Type of actuator'])
+					
+					var angleIndex = 4
+					var tube = addMiuraTube( tubeType, selectedConnectorIndex, angleIndex )
+					tubeTypeList.push( tube.tubeType )
+					tubeVisualList.push( tube.tubeVisual )
+					tubeBodiesList.push( tube.hingeBodies )
+					
+					if ( tubeType == 0 ) {
+						deflationLinearActuators.push( tube )
+					} else if ( tubeType == 1 ) {
+						deflationBendingActuators.push( tube )
+					}
+				} else {
+					// console.log('No connector is selected for adding new actuator')
+				}
+			}
+			// Need to be updated
+			function removeActuator( selectedTubeIndex ) {
+				// Remove the end connector simultaneously
+				if ( selectedTubeIndex != undefined ) {
+					// Remove the physical cannon.js body
+					world.removeBody( tubeBodiesList.splice( selectedTubeIndex, 1 ) )
+					world.removeConstraint( tubeConstraintList.splice( selectedTubeIndex, 1 ) )
+					// bodies.splice()
+					console.log(bodies.length)
+					console.log(visuals.length)
+					
+					// Remove the three.js object from the scene
+					scene.remove( tubeVisualList[ selectedTubeIndex ] )
+					// visuals.splice()
+					
+					// Remove the item from the array
+					tubeTypeList.splice( selectedTubeIndex, 1 )
+					tubeVisualList.splice( selectedTubeIndex, 1 )
+					tubeBodiesList.splice( selectedTubeIndex, 1 )
+					
+					console.log(bodies.length)
+					console.log(visuals.length)
+				}
+				
+			}
+			
+			function previewMotion() {
+				deflateLinearActuator( deflationLinearActuators )
+				deflateBendingActuators( deflationBendingActuators )
+				// inflateTube( inflationLinearActuators )
 			}
 			
 			function initializeDefaultActuators() {
@@ -263,32 +272,74 @@
 					connectorMeshes.push( mesh )
 				})
 				
-				var tubeType = 0
+				var tubeType = 1
 				var connectorIndex = 0
 				var angleIndex = 0
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				tubeTypeList.push( tube.tubeType )
 				tubeVisualList.push( tube.tubeVisual )
 				tubeBodiesList.push( tube.hingeBodies )
-				tubeTypeList.push( tubeType )
+				tubeConstraintList.push( tube.hingeConstraints )
 				// deflationLinearActuators.push( tube )
+				// deflationBendingActuators.push( tube )
 				
 				var tubeType = 0
 				var connectorIndex = 0
 				var angleIndex = 1
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				tubeTypeList.push( tube.tubeType )
 				tubeVisualList.push( tube.tubeVisual )
 				tubeBodiesList.push( tube.hingeBodies )
-				tubeTypeList.push( tubeType )
+				tubeConstraintList.push( tube.hingeConstraints )
 				// deflationLinearActuators.push( tube )
+				// deflationBendingActuators.push( tube )
 				
 				var tubeType = 0
 				var connectorIndex = 1
 				var angleIndex = 2
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				tubeTypeList.push( tube.tubeType )
 				tubeVisualList.push( tube.tubeVisual )
 				tubeBodiesList.push( tube.hingeBodies )
-				tubeTypeList.push( tubeType )
+				tubeConstraintList.push( tube.hingeConstraints )
 				// deflationLinearActuators.push( tube )
+				
+				var tubeType = 0
+				var connectorIndex = 0
+				var angleIndex = 4
+				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				tubeTypeList.push( tube.tubeType )
+				tubeVisualList.push( tube.tubeVisual )
+				tubeBodiesList.push( tube.hingeBodies )
+				tubeConstraintList.push( tube.hingeConstraints )
+				deflationLinearActuators.push( tube )
+				
+				var tubeType = 0
+				var connectorIndex = 1
+				var angleIndex = 4
+				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				tubeTypeList.push( tube.tubeType )
+				tubeVisualList.push( tube.tubeVisual )
+				tubeBodiesList.push( tube.hingeBodies )
+				tubeConstraintList.push( tube.hingeConstraints )
+				
+				var tubeType = 0
+				var connectorIndex = 2
+				var angleIndex = 4
+				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				tubeTypeList.push( tube.tubeType )
+				tubeVisualList.push( tube.tubeVisual )
+				tubeBodiesList.push( tube.hingeBodies )
+				tubeConstraintList.push( tube.hingeConstraints )
+
+				var tubeType = 0
+				var connectorIndex = 3
+				var angleIndex = 1
+				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				tubeTypeList.push( tube.tubeType )
+				tubeVisualList.push( tube.tubeVisual )
+				tubeBodiesList.push( tube.hingeBodies )
+				tubeConstraintList.push( tube.hingeConstraints )
 			}
 			
 			function addMiuraTube( tubeType, connectorIndex, angleIndex ) {
@@ -311,6 +362,8 @@
 					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI/3*2 )
 				} else if ( angleIndex == 3 ) {
 					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI )
+				} else if ( angleIndex == 4 ) {
+					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 0, 1), Math.PI/2 )
 				}
 				
 				// Copy pivot connector position
@@ -339,7 +392,7 @@
 					const meshes = bodyToMesh( body )
 					meshes.forEach( (mesh) => { tubeVisual.add( mesh ) } )
 				})
-				scene.add(tubeVisual)
+				scene.add( tubeVisual )
 				
 				// Automatically add new connector body to the scene
 				const newConnector = attachConnector( connectorIndex, hingeBodies, unitVec )
@@ -351,7 +404,7 @@
 					})
 				}
 				
-				return {tubeVisual, hingeBodies, hingeConstraints}
+				return {tubeType, tubeVisual, hingeBodies, hingeConstraints}
 			}
 			
 			function initDefaultConnector() {
@@ -1482,10 +1535,10 @@
 				}
 				
 				// Stop hinge bodies folding through each other while deflation
-				stopFacesFoldThrough( deflationLinearActuators )
+				stopFacesFoldThrough( deflationLinearActuators, deflationBendingActuators )
 				
 				// Prevent the tube from becoming a flat surface while inflation
-				stopInflation()
+				// stopInflation()
 				
 				// Render three.js objects
 				controls.update()
@@ -1533,7 +1586,6 @@
 
 					deflationBendingActuators[i].hingeConstraints.forEach( (hingeConstraint, index) => {
 						if ( hingeGroup1.includes(index)  ) {
-							console.log("333")
 							hingeConstraint.equations.forEach( function( equation ) {
 								equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
 							})
@@ -1542,7 +1594,6 @@
 						}
 						
 						if ( hingeGroup2.includes(index)  ) {
-							console.log("444")
 							hingeConstraint.equations.forEach( function( equation ) {
 								equation.setSpookParams( stiffness_2, relaxation_2, timeStep )
 							})
@@ -1553,14 +1604,23 @@
 				}
 			}
 			
-			function stopFacesFoldThrough( deflationLinearActuators ) {
+			function stopFacesFoldThrough( deflationLinearActuators, deflationBendingActuators ) {
 				// Stop hinge bodies folding through each other by setting minimum distance while deflation
 				for ( let i = 0; i < deflationLinearActuators.length; i++ ) {
 					const refBody1 = deflationLinearActuators[i].hingeBodies[17]
 					const refBody2 = deflationLinearActuators[i].hingeBodies[25]
 					
-					if ( refBody1.position.distanceSquared( refBody2.position ) < disSquMin ) {
+					if ( refBody1.position.distanceSquared( refBody2.position ) < disSquMinLinear ) {
 						deflationLinearActuators[i].hingeBodies.forEach( body => body.sleep() )
+					}
+				}
+				
+				for ( let i = 0; i < deflationBendingActuators.length; i++ ) {
+					const refBody1 = deflationBendingActuators[i].hingeBodies[17]
+					const refBody2 = deflationBendingActuators[i].hingeBodies[25]
+					
+					if ( refBody1.position.distanceSquared( refBody2.position ) < disSquMinBending ) {
+						deflationBendingActuators[i].hingeBodies.forEach( body => body.sleep() )
 					}
 				}
 			}
@@ -1577,7 +1637,7 @@
 			
 			function stopInflation( inflationConstraints ) {
 				// Prevent the tube from becoming a flat surface while inflation
-				if ( bodies[1].position.distanceSquared(bodies[9].position) >= disSquMax ) {
+				if ( bodies[1].position.distanceSquared(bodies[9].position) >= disSquMaxLinear ) {
 					const velocity = Math.PI / 1000
 					console.log("stopInflation")
 					console.log(velocity)
