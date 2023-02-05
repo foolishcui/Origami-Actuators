@@ -63,15 +63,11 @@
 			
 			// User interaction variables
 			let tubeInfoList = []
-			let tubeVisualList = []	// record the order of tubes in Three.js
-			let tubeBodiesList = [] // record the order of tubes in Cannon.js
-			let tubeConstraintList = []
-			let tubeTypeList = []   // record the type of tubes in order
-			let deflationLinearActuators = []  // lienar actuators needed to be deflated
-			let deflationBendingActuators = [] // bending actuators needed to be deflated
-			let inflationLinearActuators = [] // lienar actuators needed to be inflated
 			let connectorMeshes = []
 			let connectorBodies = []
+			
+			let deflationActuators = []
+			let inflationActuators = []
 			
 			// GUI settings
 			const gui = new GUI()
@@ -180,8 +176,8 @@
 				}
 				
 				// Get selected tube by the user
-				for ( let i = 0; i < tubeVisualList.length; i++ ) {
-					const hits = raycaster.intersectObject( tubeVisualList[i] )
+				for ( let i = 0; i < tubeInfoList.length; i++ ) {
+					const hits = raycaster.intersectObject( tubeInfoList[i].tubeVisual )
 					if ( hits.length > 0 ) {
 						selectedTubeIndex = i
 					}
@@ -214,48 +210,45 @@
 					
 					var angleIndex = 4
 					var tube = addMiuraTube( tubeType, selectedConnectorIndex, angleIndex )
-					tubeTypeList.push( tube.tubeType )
-					tubeVisualList.push( tube.tubeVisual )
-					tubeBodiesList.push( tube.hingeBodies )
-					
-					if ( tubeType == 0 ) {
-						deflationLinearActuators.push( tube )
-					} else if ( tubeType == 1 ) {
-						deflationBendingActuators.push( tube )
-					}
+					tubeInfoList.push( tube )
 				} else {
 					// console.log('No connector is selected for adding new actuator')
 				}
 			}
-			// Need to be updated
+			
 			function removeActuator( selectedTubeIndex ) {
 				// Remove the end connector simultaneously
 				if ( selectedTubeIndex != undefined ) {
 					// Remove the physical cannon.js body
-					world.removeBody( tubeBodiesList.splice( selectedTubeIndex, 1 ) )
-					world.removeConstraint( tubeConstraintList.splice( selectedTubeIndex, 1 ) )
-					// bodies.splice()
-					console.log(bodies.length)
-					console.log(visuals.length)
+					world.removeBody( tubeInfoList[ selectedTubeIndex ].hingeBodies )
+					world.removeConstraint( tubeInfoList[ selectedTubeIndex ].hingeConstraints )
+					
+					// Update the tube index in array of deflationActuators
+					const index = deflationActuators.indexOf( selectedTubeIndex )
+					if ( index > -1 ) {
+						deflationActuators.splice( index, 1 )
+						for ( let i = index; i < deflationActuators.length; i++ ) {
+							deflationActuators[index] = deflationActuators[index] - 1
+						}
+					} else {
+						for ( let i = 0; i < deflationActuators.length; i++ ) {
+							if ( deflationActuators[i] > selectedTubeIndex ) {
+								deflationActuators[i] = deflationActuators[i] - 1
+							}
+						}
+					}
 					
 					// Remove the three.js object from the scene
-					scene.remove( tubeVisualList[ selectedTubeIndex ] )
-					// visuals.splice()
+					scene.remove( tubeInfoList[ selectedTubeIndex ].tubeVisual )
 					
-					// Remove the item from the array
-					tubeTypeList.splice( selectedTubeIndex, 1 )
-					tubeVisualList.splice( selectedTubeIndex, 1 )
-					tubeBodiesList.splice( selectedTubeIndex, 1 )
-					
-					console.log(bodies.length)
-					console.log(visuals.length)
+					// Remove the item from the data array
+					tubeInfoList.splice( selectedTubeIndex, 1 )
 				}
-				
 			}
 			
 			function previewMotion() {
-				deflateLinearActuator( deflationLinearActuators )
-				deflateBendingActuators( deflationBendingActuators )
+				// Preview motion based on the user defined actuation sequence
+				deflateActuators()
 				// inflateTube( inflationLinearActuators )
 			}
 			
@@ -276,70 +269,47 @@
 				var connectorIndex = 0
 				var angleIndex = 0
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeTypeList.push( tube.tubeType )
-				tubeVisualList.push( tube.tubeVisual )
-				tubeBodiesList.push( tube.hingeBodies )
-				tubeConstraintList.push( tube.hingeConstraints )
-				// deflationLinearActuators.push( tube )
-				// deflationBendingActuators.push( tube )
+				tubeInfoList.push( tube )
 				
 				var tubeType = 0
 				var connectorIndex = 0
 				var angleIndex = 1
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeTypeList.push( tube.tubeType )
-				tubeVisualList.push( tube.tubeVisual )
-				tubeBodiesList.push( tube.hingeBodies )
-				tubeConstraintList.push( tube.hingeConstraints )
-				// deflationLinearActuators.push( tube )
-				// deflationBendingActuators.push( tube )
+				tubeInfoList.push( tube )
 				
 				var tubeType = 0
 				var connectorIndex = 1
 				var angleIndex = 2
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeTypeList.push( tube.tubeType )
-				tubeVisualList.push( tube.tubeVisual )
-				tubeBodiesList.push( tube.hingeBodies )
-				tubeConstraintList.push( tube.hingeConstraints )
-				// deflationLinearActuators.push( tube )
+				tubeInfoList.push( tube )
 				
 				var tubeType = 0
 				var connectorIndex = 0
 				var angleIndex = 4
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeTypeList.push( tube.tubeType )
-				tubeVisualList.push( tube.tubeVisual )
-				tubeBodiesList.push( tube.hingeBodies )
-				tubeConstraintList.push( tube.hingeConstraints )
-				deflationLinearActuators.push( tube )
+				tubeInfoList.push( tube )
+				var index = 3
+				deflationActuators.push( index )
 				
 				var tubeType = 0
 				var connectorIndex = 1
 				var angleIndex = 4
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeTypeList.push( tube.tubeType )
-				tubeVisualList.push( tube.tubeVisual )
-				tubeBodiesList.push( tube.hingeBodies )
-				tubeConstraintList.push( tube.hingeConstraints )
+				tubeInfoList.push( tube )
 				
 				var tubeType = 0
 				var connectorIndex = 2
 				var angleIndex = 4
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeTypeList.push( tube.tubeType )
-				tubeVisualList.push( tube.tubeVisual )
-				tubeBodiesList.push( tube.hingeBodies )
-				tubeConstraintList.push( tube.hingeConstraints )
+				tubeInfoList.push( tube )
 
 				var tubeType = 0
 				var connectorIndex = 3
 				var angleIndex = 1
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeTypeList.push( tube.tubeType )
-				tubeVisualList.push( tube.tubeVisual )
-				tubeBodiesList.push( tube.hingeBodies )
-				tubeConstraintList.push( tube.hingeConstraints )
+				tubeInfoList.push( tube )
+				var index = 6
+				deflationActuators.push( index )
 			}
 			
 			function addMiuraTube( tubeType, connectorIndex, angleIndex ) {
@@ -1527,15 +1497,30 @@
 				world.fixedStep()
 				
 				// update the position and orientation of the mesh to match the CannonBody
-				for ( let i = 0; i < bodies.length; i++ ) {
-					const body = bodies[i]
-					const visual = visuals[i]
-					visual.position.copy( bodies[i].position )
-        			visual.quaternion.copy( bodies[i].quaternion )
+				// for ( let i = 0; i < bodies.length; i++ ) {
+				// 	const body = bodies[i]
+				// 	const visual = visuals[i]
+				// 	visual.position.copy( bodies[i].position )
+        		// 	visual.quaternion.copy( bodies[i].quaternion )
+				// }
+				for ( let i = 0; i < tubeInfoList.length; i++ ) {
+					for ( let j = 0; j < tubeInfoList[i].hingeBodies.length; j++ ) {
+						const body = tubeInfoList[i].hingeBodies[j]
+						const visual = tubeInfoList[i].tubeVisual.children[j]
+						visual.position.copy( body.position )
+						visual.quaternion.copy( body.quaternion )
+					}
+				}
+				
+				for ( let i = 0; i < connectorBodies.length; i++ ) {
+					const body = connectorBodies[i]
+					const visual = connectorMeshes[i]
+					visual.position.copy( body.position )
+					visual.quaternion.copy( body.quaternion )
 				}
 				
 				// Stop hinge bodies folding through each other while deflation
-				stopFacesFoldThrough( deflationLinearActuators, deflationBendingActuators )
+				stopFacesFoldThrough()
 				
 				// Prevent the tube from becoming a flat surface while inflation
 				// stopInflation()
@@ -1545,82 +1530,95 @@
 				renderer.render( scene, camera )
 			}
 			
-			function deflateLinearActuator( deflationLinearActuators ) {
-				// Give velocity to hingeConstraints
-				const velocity = foldingVelocity
-				
-				for ( let i = 0; i < deflationLinearActuators.length; i++ ) {
-					deflationLinearActuators[i].hingeConstraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
-				}
-				
-				// setTimeout(() => {
-				// 	const velocity = 0
-				// 	constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
-				// }, foldingDuration)
-			}
-			
-			function deflateBendingActuators( deflationBendingActuators ) {
-				// Give opposite velocity to hingeConstraints for bending behavior
-				for ( let i = 0; i < deflationBendingActuators.length; i++ ) {
-					const hingeGroup1 = []
-					const hingeGroup2 = []
-					const unitNumber = 6
-					const unitHingeNum = 16
-					
-					for ( let i = 0; i < unitNumber; i++ ) {
-						hingeGroup1.push( i*unitHingeNum+1, i*unitHingeNum+2, i*unitHingeNum+3, i*unitHingeNum+5, i*unitHingeNum+6, i*unitHingeNum+7 )
-						hingeGroup2.push( i*unitHingeNum+0, i*unitHingeNum+4, i*unitHingeNum+8, i*unitHingeNum+9, i*unitHingeNum+10, i*unitHingeNum+11 )
-						if ( i < unitNumber - 1 ) {
-							hingeGroup1.push( i*unitHingeNum+12, i*unitHingeNum+13, i*unitHingeNum+14, i*unitHingeNum+15 )
-						}
-					}
-					
-					// Assign different stiffness, relaxation to two groups of hinge constraints
-					const stiffness_1 = 1e6
-					const relaxation_1 = 0.5
-					const stiffness_2 = 1e10
-					const relaxation_2 = 0.8
-					const timeStep = 1/60
-					const initialHingeVelocity_1 = -Math.PI / 0.55
-					const initialHingeVelocity_2 = Math.PI / 0.3
+			function deflateActuators() {
+				// parameters for linear actuator
+				const foldingVelocity = Math.PI / 2.0
 
-					deflationBendingActuators[i].hingeConstraints.forEach( (hingeConstraint, index) => {
-						if ( hingeGroup1.includes(index)  ) {
-							hingeConstraint.equations.forEach( function( equation ) {
-								equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
-							})
-							hingeConstraint.enableMotor()
-							hingeConstraint.setMotorSpeed( initialHingeVelocity_1 )
-						}
+				// parameters for bending actuator
+				const hingeGroup1 = []
+				const hingeGroup2 = []
+				const unitNumber = 6
+				const unitHingeNum = 16
+				
+				for ( let i = 0; i < unitNumber; i++ ) {
+					hingeGroup1.push( i*unitHingeNum+1, i*unitHingeNum+2, i*unitHingeNum+3, i*unitHingeNum+5, i*unitHingeNum+6, i*unitHingeNum+7 )
+					hingeGroup2.push( i*unitHingeNum+0, i*unitHingeNum+4, i*unitHingeNum+8, i*unitHingeNum+9, i*unitHingeNum+10, i*unitHingeNum+11 )
+					if ( i < unitNumber - 1 ) {
+						hingeGroup1.push( i*unitHingeNum+12, i*unitHingeNum+13, i*unitHingeNum+14, i*unitHingeNum+15 )
+					}
+				}
+
+				// Assign different stiffness, relaxation to two groups of hinge constraints
+				const stiffness_1 = 1e6
+				const relaxation_1 = 0.5
+				const stiffness_2 = 1e10
+				const relaxation_2 = 0.8
+				const timeStep = 1/60
+				const initialHingeVelocity_1 = -Math.PI / 0.55
+				const initialHingeVelocity_2 = Math.PI / 0.3
+				
+				// Iterate the array of deflationActuators
+				for ( let i = 0; i < deflationActuators.length; i++ ) {
+					const index = deflationActuators[i]
+					
+					// if this is a linear actuator
+					if ( tubeInfoList[index].tubeType == 0 ) {
+						// Give velocity to hingeConstraints
+						tubeInfoList[index].hingeConstraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(foldingVelocity) )
 						
-						if ( hingeGroup2.includes(index)  ) {
-							hingeConstraint.equations.forEach( function( equation ) {
-								equation.setSpookParams( stiffness_2, relaxation_2, timeStep )
-							})
-							hingeConstraint.enableMotor()
-							hingeConstraint.setMotorSpeed( initialHingeVelocity_2 )
-						}
-					})
+						// setTimeout(() => {
+						// 	const velocity = 0
+						// 	constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+						// }, foldingDuration)
+					} 
+					
+					// if this is a bending actuator
+					if ( tubeInfoList[index].tubeType == 1 ) {
+						// Give opposite velocity to hingeConstraints for bending behavior
+						tubeInfoList[index].hingeConstraints.forEach( (hingeConstraint, index) => {
+							if ( hingeGroup1.includes(index) ) {
+								hingeConstraint.equations.forEach( function( equation ) {
+									equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
+								})
+								hingeConstraint.enableMotor()
+								hingeConstraint.setMotorSpeed( initialHingeVelocity_1 )
+							}
+							
+							if ( hingeGroup2.includes(index) ) {
+								hingeConstraint.equations.forEach( function( equation ) {
+									equation.setSpookParams( stiffness_2, relaxation_2, timeStep )
+								})
+								hingeConstraint.enableMotor()
+								hingeConstraint.setMotorSpeed( initialHingeVelocity_2 )
+							}
+						})
+					}
 				}
 			}
 			
-			function stopFacesFoldThrough( deflationLinearActuators, deflationBendingActuators ) {
+			function stopFacesFoldThrough() {
 				// Stop hinge bodies folding through each other by setting minimum distance while deflation
-				for ( let i = 0; i < deflationLinearActuators.length; i++ ) {
-					const refBody1 = deflationLinearActuators[i].hingeBodies[17]
-					const refBody2 = deflationLinearActuators[i].hingeBodies[25]
+				for ( let i = 0; i < deflationActuators.length; i++ ) {
+					const index = deflationActuators[i]
 					
-					if ( refBody1.position.distanceSquared( refBody2.position ) < disSquMinLinear ) {
-						deflationLinearActuators[i].hingeBodies.forEach( body => body.sleep() )
+					// if this is a linear actuator
+					if ( tubeInfoList[index].tubeType == 0 ) {
+						const refBody1 = tubeInfoList[index].hingeBodies[17]
+						const refBody2 = tubeInfoList[index].hingeBodies[25]
+						
+						if ( refBody1.position.distanceSquared( refBody2.position ) < disSquMinLinear ) {
+							tubeInfoList[index].hingeBodies.forEach( body => body.sleep() )
+						}
 					}
-				}
-				
-				for ( let i = 0; i < deflationBendingActuators.length; i++ ) {
-					const refBody1 = deflationBendingActuators[i].hingeBodies[17]
-					const refBody2 = deflationBendingActuators[i].hingeBodies[25]
 					
-					if ( refBody1.position.distanceSquared( refBody2.position ) < disSquMinBending ) {
-						deflationBendingActuators[i].hingeBodies.forEach( body => body.sleep() )
+					// if this is a bending actuator
+					if ( tubeInfoList[index].tubeType == 1 ) {
+						const refBody1 = tubeInfoList[index].hingeBodies[17]
+						const refBody2 = tubeInfoList[index].hingeBodies[25]
+						
+						if ( refBody1.position.distanceSquared( refBody2.position ) < disSquMinBending ) {
+							tubeInfoList[index].hingeBodies.forEach( body => body.sleep() )
+						}
 					}
 				}
 			}
