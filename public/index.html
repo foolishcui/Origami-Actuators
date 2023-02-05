@@ -36,6 +36,10 @@
 			/**
 			 * Todo List:
 			 * Step1: Reset folding ratio to 0.75 (CZT)
+			 * Change tube type
+			 * Remove connector
+			 * Add actuator one by one
+			 * Add basic primitive shape
 			 * Step4: Arduino communication
 			*/
 			
@@ -54,7 +58,7 @@
 			const unfoldingVelocity = - Math.PI / 4
 			const unFoldingDuration = 3000
 			const disSquMinLinear = 150
-			const disSquMinBending = 60
+			const disSquMinBending = 150
 			const disSquMaxLinear = 720
 			
 			// Keep in sync the bodies with the visuals, they always have the same length
@@ -217,13 +221,12 @@
 			}
 			
 			function removeActuator( selectedTubeIndex ) {
-				// Remove the end connector simultaneously
 				if ( selectedTubeIndex != undefined ) {
 					// Remove the physical cannon.js body
 					world.removeBody( tubeInfoList[ selectedTubeIndex ].hingeBodies )
 					world.removeConstraint( tubeInfoList[ selectedTubeIndex ].hingeConstraints )
 					
-					// Update the tube index in array of deflationActuators
+					// Update the index of deflationActuators
 					const index = deflationActuators.indexOf( selectedTubeIndex )
 					if ( index > -1 ) {
 						deflationActuators.splice( index, 1 )
@@ -243,6 +246,33 @@
 					
 					// Remove the item from the data array
 					tubeInfoList.splice( selectedTubeIndex, 1 )
+					
+					// Remove the end connector simultaneously
+					var inuse = false
+					for ( let i = 0; i < connectorMeshes.length; i++ ) {
+						const aabb = new THREE.Box3()
+						aabb.setFromObject( connectorMeshes[i] )
+						const center = new THREE.Vector3()
+						aabb.getCenter( center )
+						
+						for ( let j = 0; j < tubeInfoList.length; j++ ) {
+							const aabbTube = new THREE.Box3()
+							aabbTube.setFromObject( tubeInfoList[j].tubeVisual )
+							const centerTube = new THREE.Vector3()
+							aabbTube.getCenter( centerTube )
+							
+							const dis = center.distanceTo( centerTube )
+							if ( Math.abs( dis - 93 ) < 1 ) {
+								inuse = true
+							}
+						}
+						
+						if ( inuse == false ) {
+							scene.remove( connectorMeshes[i] )
+							console.log( connectorMeshes[i] )
+						}
+						inuse = false
+					}
 				}
 			}
 			
@@ -252,6 +282,7 @@
 				// inflateTube( inflationLinearActuators )
 			}
 			
+			// Basic functions
 			function initializeDefaultActuators() {
 				/**
 				 * Initialize a default connector in the physical world and visualize it in the scene
@@ -291,11 +322,13 @@
 				var index = 3
 				deflationActuators.push( index )
 				
-				var tubeType = 0
+				var tubeType = 1
 				var connectorIndex = 1
 				var angleIndex = 4
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
 				tubeInfoList.push( tube )
+				var index = 4
+				deflationActuators.push( index )
 				
 				var tubeType = 0
 				var connectorIndex = 2
@@ -364,7 +397,7 @@
 				})
 				scene.add( tubeVisual )
 				
-				// Automatically add new connector body to the scene
+				// Automatically add new connector body to the scene when adding a new tube
 				const newConnector = attachConnector( connectorIndex, hingeBodies, unitVec )
 				if ( newConnector != undefined ) {
 					connectorBodies.push( newConnector )
@@ -427,7 +460,7 @@
 				let flag = true
 				
 				// Check if there is a existing connector in the new position
-				for ( let i=0; i<connectorBodies.length; i++ ) {
+				for ( let i = 0; i < connectorBodies.length; i++ ) {
 					const vecEqual = newPos.almostEquals( connectorBodies[i].position )
 					if ( vecEqual == true ) {
 						flag = false
