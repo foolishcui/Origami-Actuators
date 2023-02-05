@@ -37,7 +37,6 @@
 			 * Todo List:
 			 * Step1: Reset folding ratio to 0.75 (CZT)
 			 * Change tube type
-			 * Remove connector
 			 * Add actuator one by one
 			 * Add basic primitive shape
 			 * Step4: Arduino communication
@@ -195,6 +194,10 @@
 				if ( controlType == 'Remove an actuator' ) {
 					removeActuator( selectedTubeIndex )
 				}
+
+				if ( controlType == 'Rotate the bending direction by 90 degrees' ) {
+					rotateBendingActuator( selectedTubeIndex )
+				}
 				
 				// Clear the last selection
 				selectedConnectorIndex = undefined
@@ -254,7 +257,7 @@
 						aabb.setFromObject( connectorMeshes[i] )
 						const center = new THREE.Vector3()
 						aabb.getCenter( center )
-						
+						// Check if there is adjacent tube by distance
 						for ( let j = 0; j < tubeInfoList.length; j++ ) {
 							const aabbTube = new THREE.Box3()
 							aabbTube.setFromObject( tubeInfoList[j].tubeVisual )
@@ -266,12 +269,22 @@
 								inuse = true
 							}
 						}
-						
+						// Remove the connector in three.js and cannon.js
 						if ( inuse == false ) {
 							scene.remove( connectorMeshes[i] )
-							console.log( connectorMeshes[i] )
+							connectorMeshes.splice( i, 1 )
+							world.removeBody( connectorBodies[i] )
+							connectorBodies.splice( i, 1 )
 						}
 						inuse = false
+					}
+				}
+			}
+			
+			function rotateBendingActuator( selectedTubeIndex ) {
+				if ( selectedTubeIndex != undefined ) {
+					if ( tubeInfoList[ selectedTubeIndex ].tubeType == 1 ) {
+						console.log( '3334' )
 					}
 				}
 			}
