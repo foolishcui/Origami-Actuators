@@ -13,8 +13,9 @@
 				--width: 400px;
 			}
 			.control-inactive button {
-				color: #888;
+				color: rgb(190, 64, 64);
 			}
+
 		</style>
 	</head>
 	
@@ -76,15 +77,32 @@
 			let inflationActuators = []
 
 			let airChannels = [] //加入空气分组
-			let colors = [] //每个分组颜色
+			let initColor = 10074050
+			let colors = [5948868,5150607,4443520,15177119,16764301] //每个分组颜色
 			let buttons = [] //用于界面交互
 			let startTimes = [] //运动开始时间
 			let endTimes = [] //运动结束时间
-			let changeFlag = 0
+			let loopControls = []
+			let actuationMethods = []
+			let changeFlag = 0 //highlight
+
+			//init control varablies
+			airChannels.push("-----")
 			airChannels.push("Airchannel 1")
 			airChannels.push("Airchannel 2")
-			colors.push(color16())
-			colors.push(color16())
+			actuationMethods.push('Deflation')
+			actuationMethods.push('Deflation')
+			actuationMethods.push('Deflation')
+			loopControls.push(false)
+			loopControls.push(false)
+			loopControls.push(false)
+			startTimes.push(0)
+			startTimes.push(0)
+			startTimes.push(0)
+			endTimes.push(1)
+			endTimes.push(1)
+			endTimes.push(1)
+
 			
 			// GUI settings
 			const gui = new GUI()
@@ -140,20 +158,42 @@
 				'Finish' : function(){//完成分组按钮此时生成第三步界面
 					controlType = "step2finish"	
 					button_f.disable()
-					air.options( airChannels );
 					buttons.forEach((button)=>{
-						button.domElement.classList.add( 'control-inactive' );
+						button.domElement.classList.remove( 'control-inactive' );
 					})
+					e1.destroy()
+					e2.destroy()
+					e3.destroy()
+					e4.destroy()
+					e5.destroy()
+					e6.destroy()
+					e7.destroy()		
+					e1 = step3.add( step3obj, 'Choose an air channel', airChannels ).listen().onChange(showAirchannel)
+					e2 = step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] ).listen().onChange(function(value){
+						let tmp = e1.getValue().substr(-1)
+					
+						
+					})
+					e3 = step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 ).listen().onChange(function(value){
+						let tmp = e1.getValue().substr(-1)
+
+					})
+					e4 = step3.add( step3obj, 'End time (s)', 1, 5, 0.1 ).listen()
+					e5 = step3.add( step3obj, 'Add to sequence motion' )
+					e6 = step3.add( step3obj, 'Preview motion' ).listen().onChange( previewMotion )
+					e7 = step3.add( step3obj, 'Add loop control' ).listen()			
+					step3.open()
+					step3.show()
 				},
 				'Add new air channel' : function(){//空气分组
 					button_f.enable()
-					var num = -1
-					for (var i in step2obj){
+					var num = 0
+					for (var i in airChannels){
 						num++
 					}
+					// console.log(num)
 					var str = num + ''
-					var a = parseInt(controlType.substr(-1))-1
-					console.log(str)
+					
 					step2obj["Airchannel "+ str] = function(){
 						controlType = "Airchannel "+ str
 						changeFlag = 1
@@ -165,26 +205,57 @@
 					
 					const button = step2.add( step2obj, "Airchannel "+ str )
 					buttons.push(button)
-					buttons.forEach((button)=>{
+					if(inGroupmode(controlType)){
+						var a = parseInt(controlType.substr(-1))-1
+						buttons.forEach((button)=>{
 						button.domElement.classList.add( 'control-inactive' );
 					})
-					buttons[a].domElement.classList.remove( 'control-inactive' );
+						buttons[a].domElement.classList.remove( 'control-inactive' );
+					}
 					airChannels.push("Airchannel "+ str)
-					colors.push(color16())
+					actuationMethods.push('Deflation')
+					startTimes.push(0)
+					endTimes.push(1)
+					loopControls.push(false)
+
+					// colors.push(color16())
+					step3.hide()
 					// console.log(airchannel)	
-				}
+				},
 			}
 			
 			const step3obj = {
-				'Choose an air channel': 'Air channel 1',
+				'Choose an air channel': '-----',
 				'Actuation method': 'Deflation',
 				'Start time (s)': 0.5,
 				'End time (s)': 3.0,
-				'Add to sequence motion': function() {},
+				'Add to sequence motion': function() {
+					let airNum = e1.getValue().substr(-1)
+					// console.log(e1.getValue())
+					if(airNum-''>=0&&airNum-''<=9){
+						if(e3.getValue()< e4.getValue()){
+							actuationMethods[airNum] = e2.getValue()
+							startTimes[airNum] = e3.getValue()
+							endTimes[airNum] = e4.getValue()
+							loopControls[airNum] = e7.getValue()
+	
+						}
+						else{
+							alert("Time error")
+						}
+					}
+					else{
+						alert("Airchannel error")
+					}
+					// console.log(e2.getValue())
+					// console.log(e3.getValue())
+					// console.log(e4.getValue())
+					// console.log(e7.getValue())
+				},
 				'Preview motion': false,
 				'Add loop control': true
 			}
-			
+
 			const step4obj = {
 				'Generate control code': function() {}
 			}
@@ -192,6 +263,7 @@
 			var controlType = null
 			var step1 = gui.addFolder( 'Step 1: Create a Shape' )
 			var step2 = gui.addFolder( 'Step 2: Group Actuators' )
+			
 			step2.add( step2obj, 'Add new air channel' )
 			const button_f = step2.add( step2obj, 'Finish' )
 			const button1 = step2.add( step2obj, 'Airchannel 1' )
@@ -199,14 +271,19 @@
 			buttons.push(button1)
 			buttons.push(button2)
 			step2.open()
+
 			var step3 = gui.addFolder( 'Step 3: Add Actuation & Preview Motion' )
-			const air = step3.add( step3obj, 'Choose an air channel', airChannels )
+			let e1 = step3.add( step3obj, 'Choose an air channel', airChannels )
+			let e2 = step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] )
+			let e3 = step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 )
+			let e4 = step3.add( step3obj, 'End time (s)', 1, 5, 0.1 )
+			let e5 = step3.add( step3obj, 'Add to sequence motion' )
+			let e6 = step3.add( step3obj, 'Preview motion' )
+			let e7 = step3.add( step3obj, 'Add loop control' )		
 			var step4 = gui.addFolder( 'Step 4: Assemble & Generate Control Code' )
 			step3.hide()
 			step4.hide()
 
-
-			
 			let INTERSECTED = 0
 			
 			initThree()
@@ -216,6 +293,20 @@
 			animate()
 			
 			initGUI()
+
+			function showAirchannel(value){
+				let tmp = value.substr(-1)
+				step3obj['Actuation method'] = actuationMethods[tmp]
+				step3obj['Start time (s)'] = startTimes[tmp]
+				step3obj['End time (s)'] = endTimes[tmp]
+				step3obj['Add loop control'] = loopControls[tmp]
+				// // console.log(tmp)
+				// if(tmp-''>=0&&tmp-''<=9){
+				// 	// e3.setValue(startTimes[tmp])
+				// 	// e4.setValue(endTimes[tmp])
+				// 	// e5.setValue(loopControls[tmp])
+				// }		
+			}
 
 			function inGroupmode(mode){//groupingmode
 				var flag = 0
@@ -243,20 +334,8 @@
 				// step1.add( step1obj, 'Load mesh', 'Load mesh' )
 				step1.open()
 
-
-				
 				// Different channels will be displayed in different colors
-				
-				step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] )
-				step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 )
-				step3.add( step3obj, 'End time (s)', 1, 5, 0.1 )
-				step3.add( step3obj, 'Add to sequence motion' )
-				step3.add( step3obj, 'Preview motion' )
-				step3.add( step3obj, 'Add loop control' )
-				// step3.add( step3obj, 'finish')
-				step3.open()
-				step3.show()
-				
+			
 				step4.add( step4obj, 'Generate control code' )
 				step4.open()
 			}
@@ -302,7 +381,7 @@
 					
 					if(tubeInfoList[selectedTubeIndex]){
 						changeFlag = 1
-						var a = parseInt(controlType.substr(-1))-1
+						// var a = parseInt(controlType.substr(-1))
 						if(tubeInfoList[selectedTubeIndex].tubeVisual.name != controlType){
 							tubeInfoList[selectedTubeIndex].tubeVisual.name = controlType
 							// tubeInfoList[selectedTubeIndex].tubeVisual.children.forEach( (mesh) => {
@@ -314,7 +393,7 @@
 						else if(tubeInfoList[selectedTubeIndex].tubeVisual.name == controlType){
 							tubeInfoList[selectedTubeIndex].tubeVisual.name=''
 							// tubeInfoList[selectedTubeIndex].tubeVisual.children.forEach( (mesh) => {
-							// 	mesh.material.emissive.setHex(0x0f0fff );
+							// 	mesh.material.emissive.setHex(initColor );
 							// 	// console.log(object.children)
 							// })
 							// console.log(tubeInfoList[selectedTubeIndex].tubeVisual.name)
@@ -435,7 +514,10 @@
 			
 			function previewMotion() {
 				// Preview motion based on the user defined actuation sequence
-				deflateActuators()
+				if(e6.getValue()==true){
+					let detaTime = e4.getValue()-e3.getValue()
+					deflateActuators()
+				}
 				// inflateTube( inflationLinearActuators )
 			}
 			
@@ -1560,7 +1642,7 @@
 				const basicMaterial = new THREE.MeshBasicMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
 				const phongMaterial = new THREE.MeshPhongMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
 				const normalMaterial = new THREE.MeshNormalMaterial( {side: THREE.DoubleSide, wireframe: false} )
-				const lambertMaterial = new THREE.MeshLambertMaterial( { color:  0x0f0fff,side: THREE.DoubleSide,  wireframe: false} )
+				const lambertMaterial = new THREE.MeshLambertMaterial( { color: initColor ,side: THREE.DoubleSide,  wireframe: false} )
 				const material = lambertMaterial
 				// const color = new Float32Array()
 				
@@ -1615,6 +1697,7 @@
 					// console.log(mesh)
 					mesh.position.copy( body.shapeOffsets[i] )
 					mesh.quaternion.copy( body.shapeOrientations[i] )
+					mesh.material.emissive.setHex(initColor)
 					// Enable shadows on every object
 					mesh.receiveShadow = true
     				mesh.castShadow = true
@@ -1859,7 +1942,7 @@
 				// 		}
 				// 		else{
 				// 			object.tubeVisual.children.forEach( (mesh) => {
-				// 				mesh.material.emissive.setHex(0x0f0fff );
+				// 				mesh.material.emissive.setHex(initColor );
 				// 				// console.log(object.children)
 				// 			})
 				// 		}
@@ -1912,7 +1995,7 @@
 							}
 							INTERSECTED = connectorMeshes[selectedConnectorIndex]
 							INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
-							INTERSECTED.material.emissive.setHex( 0xff0000 );
+							INTERSECTED.material.emissive.setHex( colors[0] );
 						}
 						
 
@@ -1929,13 +2012,13 @@
 						tubeInfoList.forEach((object)=>{
 							if(object.tubeVisual.name == controlType){							
 								object.tubeVisual.children.forEach( (mesh) => {
-									mesh.material.emissive.setHex(colors[parseInt(controlType.substr(-1))-1]);
+									mesh.material.emissive.setHex(colors[parseInt(controlType.substr(-1))]);
 									// console.log(object.children)
 								})
 							}
 							else{
 								object.tubeVisual.children.forEach( (mesh) => {
-									mesh.material.emissive.setHex(0x0f0fff );
+									mesh.material.emissive.setHex(initColor );
 									// console.log(object.children)
 								})
 							}
@@ -1954,13 +2037,13 @@
 							INTERSECTED = tubeInfoList[selectedTubeIndex].tubeVisual;
 							
 							if(INTERSECTED.name == controlType){							
-								INTERSECTED.currentHex = colors[parseInt(controlType.substr(-1))-1]
+								INTERSECTED.currentHex = colors[parseInt(controlType.substr(-1))]
 							}				
 							else {
 								INTERSECTED.currentHex = INTERSECTED.children[0].material.emissive.getHex();
 							}
 							INTERSECTED.children.forEach( (mesh) => {
-								mesh.material.emissive.setHex(0xff0000);
+								mesh.material.emissive.setHex(colors[0]);
 							})
 						}
 
