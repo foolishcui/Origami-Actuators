@@ -30,8 +30,9 @@
         <script type="module">
 			import * as THREE from 'three'
 			import * as CANNON from 'cannon-es'
-			import {GUI} from 'three/addons/libs/lil-gui.module.min.js'
-			import {OrbitControls} from 'three/addons/controls/OrbitControls.js'
+			import { GUI } from 'three/addons/libs/lil-gui.module.min.js'
+			import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+			import { TransformControls } from 'three/addons/controls/TransformControls.js'
 			
 			/**
 			 * Todo List:
@@ -39,12 +40,12 @@
 			 * Change tube type
 			 * Add actuator one by one
 			 * Add basic primitive shape
-			 * Step4: Arduino communication
+			 * Arduino communication (JX)
 			*/
 			
 			// Three.js variables for render
 			let renderer, camera, scene
-			let controls
+			let controls, transControl
 			
 			// Cannon.js variables for physical simulation
 			let world
@@ -199,7 +200,7 @@
 				if ( controlType == 'Remove an actuator' ) {
 					removeActuator( selectedTubeIndex )
 				}
-
+				
 				if ( controlType == 'Rotate the bending direction by 90 degrees' ) {
 					rotateBendingActuator( selectedTubeIndex )
 				}
@@ -220,8 +221,25 @@
 				if ( selectedConnectorIndex != undefined ) {
 					console.log("Add a " + step1obj['Type of actuator'])
 					
-					var tube = addMiuraTube( tubeType, selectedConnectorIndex, axis[1], angle[0] )
-					tubeInfoList.push( tube )
+					// Transform the new added actuator
+					transControl.detach()
+					transControl.dispose()
+					transControl = new TransformControls( camera, renderer.domElement )
+					transControl.attach( connectorMeshes[ selectedConnectorIndex ] )
+					scene.add( transControl )
+					transControl.addEventListener( 'mouseDown', function() {
+						// Ensure that only one actuator is added based on selected connector and axis
+						if ( transControl.axis == 'X' ) {
+							var tube = addMiuraTube( tubeType, selectedConnectorIndex, axis[0], angle[0] )
+							tubeInfoList.push( tube )
+						} else if ( transControl.axis == 'Y' ) {
+							var tube = addMiuraTube( tubeType, selectedConnectorIndex, axis[2], angle[5] )
+							tubeInfoList.push( tube )
+						} else if ( transControl.axis == 'Z' ) {
+							var tube = addMiuraTube( tubeType, selectedConnectorIndex, axis[1], -angle[5] )
+							tubeInfoList.push( tube )
+						}
+					} )
 				} else {
 					// console.log('No connector is selected for adding new actuator')
 				}
@@ -234,11 +252,9 @@
 					world.removeConstraint( tubeInfoList[ selectedTubeIndex ].hingeConstraints )
 					
 					// Update the index of deflationActuators
-					console.log(deflationActuators)
 					const index = deflationActuators.indexOf( selectedTubeIndex )
 					if ( index > -1 ) {
 						deflationActuators.splice( index, 1 )
-						console.log(deflationActuators)
 						for ( let i = index; i < deflationActuators.length; i++ ) {
 							deflationActuators[i] = deflationActuators[i] - 1
 						}
@@ -1494,9 +1510,9 @@
         		renderer.shadowMap.type = THREE.PCFSoftShadowMap
 				
 				// Camera
-				camera = new THREE.PerspectiveCamera( 90, window.innerWidth / window.innerHeight, 0.1, 1000 )
+				camera = new THREE.PerspectiveCamera( 90, window.innerWidth / window.innerHeight, 0.01, 1000 )
 				camera.position.set( 0, 500, 400 )
-
+				
 				// Scene
 				scene = new THREE.Scene()
 				scene.background = new THREE.Color( 'rgb(240, 240, 240)' )
@@ -1531,6 +1547,13 @@
 				controls.dampingFactor = 0.2
 				controls.minDistance = 10
 				controls.maxDistance = 500
+				
+				// Transformation controls
+				transControl = new TransformControls( camera, renderer.domElement )
+				// transControl.addEventListener( 'change', function() { renderer.render( scene, camera ) } )
+				// transControl.addEventListener( 'dragging-changed', function ( event ) {
+				// 	controls.enabled = ! event.value;
+				// } )
 			}
 			
 			function animate() {
