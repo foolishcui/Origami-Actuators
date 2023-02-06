@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 	<head>
@@ -39,8 +38,11 @@
 			
 			/**
 			 * Todo List:
-			 * Reset folding ratio to 0.75 (CZT)
-			 * Actuators belong to the same group will be displayed with same color (JX)
+			 * Step1: Reset folding ratio to 0.75 (CZT)
+			 * Change tube type
+			 * Add actuator one by one
+			 * Add basic primitive shape
+			 * Step4: Arduino communication
 			*/
 			
 			// Three.js variables for render
@@ -49,169 +51,173 @@
 			
 			// Cannon.js variables for physical simulation
 			let world
-			let useGravity = true
+			let useGravity = false
 			
 			// Set hinge motor velocity that determines speed and direction
 			const initialHingeVelocity = 0
-			const foldingVelocity = Math.PI / 2.5
+			const foldingVelocity = Math.PI / 2.0
 			const foldingDuration = 1600
 			const unfoldingVelocity = - Math.PI / 4
 			const unFoldingDuration = 3000
-			const disSquMin = 180
-			const disSquMax = 720
+			const disSquMinLinear = 150
+			const disSquMinBending = 150
+			const disSquMaxLinear = 720
 			
 			// Keep in sync the bodies with the visuals, they always have the same length
 			let bodies = []
 			let visuals = []
 			
 			// User interaction variables
-			let tubeVisualList = []
-			let tubeBodiesList = []
-			let deflationTubes = []
-			let inflationtubes = []
+			let tubeInfoList = []
 			let connectorMeshes = []
 			let connectorBodies = []
+			
+			let deflationActuators = []
+			let inflationActuators = []
 
-			let airchannel = [] //加入空气分组
-			let color = [] //每个分组颜色
-			let Button = [] //用于界面交互
-
-			airchannel.push("Airchannel 1")
-			airchannel.push("Airchannel 2")
-			color.push(color16())
-			color.push(color16())
-			// console.log(color)
+			let airChannels = [] //加入空气分组
+			let colors = [] //每个分组颜色
+			let buttons = [] //用于界面交互
+			let startTimes = [] //运动开始时间
+			let endTimes = [] //运动结束时间
+			let changeFlag = 0
+			airChannels.push("Airchannel 1")
+			airChannels.push("Airchannel 2")
+			colors.push(color16())
+			colors.push(color16())
+			
+			// GUI settings
 			const gui = new GUI()
-			var step1 = gui.addFolder( 'Step 1: Create a Shape' )
-			var step2 = gui.addFolder( 'Step 2: Group Actuators' )
-			var step3 = gui.addFolder( 'Step 3: Add Actuation & Preview Motion' )
-			var step4 = gui.addFolder( 'Step 4: Assemble & Generate Control Code' )
-			step3.hide()
-			step4.hide()
-			
-			var controltype = {
-				'type': "none",
-			}
-			
 			const step1obj = {
 				'Type of actuator': 'linear actuator',
-				'Add a new actuator': function() { console.log('addtube') },
-				'Remove an actuator': function() { console.log('removetube') },
-				'Load mesh': function() { console.log('load mesh and convert edges to actuators') }
+				'Add a new actuator': function() { controlType = 'Add a new actuator' },
+				'Remove an actuator': function() { controlType = 'Remove an actuator' },
+				'Rotate the bending direction by 90 degrees': function() { controlType = 'Rotate the bending direction by 90 degrees' },
+				'Load mesh': function() { controlType = 'Load mesh' 
+				// let input = document.createElement('input');
+    			// 	document.body.appendChild(input);
+    			// 	input.type = 'file';
+    			// 	input.id = 'inputFile';
+    			// 	input.style = 'display:none';
+
+    			// 	document.getElementById("inputFile").click();
+   				//     document.getElementById("inputFile").onchange = ()=>{
+				// 	// console.log(input.value)
+      			// 	let reader = new FileReader();
+      			// 	reader.onload = (event) => {
+				// 		let inputFileString = event.target.result;
+						
+				// 		//读取文件操作 不是路径 
+				// 		//如果要转化成路径可以 在文件的相对路径下写一个相同文件
+				// 	}
+				// 	// reader.readAsText(document.getElementById("inputFile").files[0]);
+				// 	reader.readAsDataURL(document.getElementById("inputFile").files[0]);
+     			// 	document.body.removeChild(input);
+				// }
+				// 	console.log('load mesh and convert edges to actuators') 
+				}
 			}
 			
-			const step4obj = {
-				'Generate control code': function() {}
+			const step2obj = {
+				// 'Select actuators to create an air channel': function() {selectActuators()},
+				'Airchannel 1': function() {
+					controlType = "Airchannel 1"
+					changeFlag = 1
+					buttons.forEach((button)=>{
+						button.domElement.classList.add( 'control-inactive' );
+					})
+					buttons[0].domElement.classList.remove( 'control-inactive' );
+				},
+				'Airchannel 2': function() {
+					controlType = "Airchannel 2"
+					changeFlag = 1
+					buttons.forEach((button)=>{
+						button.domElement.classList.add( 'control-inactive' );
+					})
+					buttons[1].domElement.classList.remove( 'control-inactive' );
+				},
+				//按钮添加分组
+				'Finish' : function(){//完成分组按钮此时生成第三步界面
+					controlType = "step2finish"	
+					button_f.disable()
+					air.options( airChannels );
+					buttons.forEach((button)=>{
+						button.domElement.classList.add( 'control-inactive' );
+					})
+				},
+				'Add new air channel' : function(){//空气分组
+					button_f.enable()
+					var num = -1
+					for (var i in step2obj){
+						num++
+					}
+					var str = num + ''
+					var a = parseInt(controlType.substr(-1))-1
+					console.log(str)
+					step2obj["Airchannel "+ str] = function(){
+						controlType = "Airchannel "+ str
+						changeFlag = 1
+						buttons.forEach((button)=>{
+							button.domElement.classList.add( 'control-inactive' );
+						})
+							buttons[num-1].domElement.classList.remove( 'control-inactive' );
+						}
+					
+					const button = step2.add( step2obj, "Airchannel "+ str )
+					buttons.push(button)
+					buttons.forEach((button)=>{
+						button.domElement.classList.add( 'control-inactive' );
+					})
+					buttons[a].domElement.classList.remove( 'control-inactive' );
+					airChannels.push("Airchannel "+ str)
+					colors.push(color16())
+					// console.log(airchannel)	
+				}
 			}
+			
 			const step3obj = {
 				'Choose an air channel': 'Air channel 1',
 				'Actuation method': 'Deflation',
 				'Start time (s)': 0.5,
 				'End time (s)': 3.0,
 				'Add to sequence motion': function() {},
-				'Preview motion': true,
-				'Add loop control': true,
-				'finish': function() {//按钮生成下一步界面
-					step4.add( step4obj, 'Generate control code' )
-					step4.open()
-					step4.show()
-				}
+				'Preview motion': false,
+				'Add loop control': true
 			}
 			
-			var step2obj = {
-				// 'Select actuators to create an air channel': function() {selectActuators()},
-				'Airchannel 1': function() {
-					controltype.type = "Airchannel 1"
-					Button.forEach((button)=>{
-						button.domElement.classList.add( 'control-inactive' );
-					})
-					Button[0].domElement.classList.remove( 'control-inactive' );
-				},
-				'Airchannel 2': function() {
-					controltype.type = "Airchannel 2"
-					Button.forEach((button)=>{
-						button.domElement.classList.add( 'control-inactive' );
-					})
-					Button[1].domElement.classList.remove( 'control-inactive' );
-				},
-				//按钮添加分组
-				'finish' : function(){//完成分组按钮此时生成第三步界面
-					controltype.type = "step2finish"	
-					Button_f.disable()
-					air.options( airchannel );
-					Button.forEach((button)=>{
-						button.disable()
-					})
-				},
-				'+' : function(){//空气分组
-					Button_f.enable()
-
-					var num = -1
-					for (var i in step2obj){
-						num++
-					}
-					var str = num + ''
-					var a = parseInt(controltype.type.substr(-1))-1
-					console.log(str)
-					step2obj["Airchannel "+ str] = function(){
-						controltype.type = "Airchannel "+ str
-						Button.forEach((button)=>{
-							button.domElement.classList.add( 'control-inactive' );
-						})
-							Button[num-1].domElement.classList.remove( 'control-inactive' );
-						}
-					// step2obj.prototype.name = 'airchannel3'
-					const button = step2.add( step2obj, "Airchannel "+ str )
-					Button.push(button)
-					Button.forEach((button)=>{
-						button.domElement.classList.add( 'control-inactive' );
-					})
-					Button[a].domElement.classList.remove( 'control-inactive' );
-					airchannel.push("Airchannel "+ str)
-					color.push(color16())
-					// console.log(airchannel)	
-				}
+			const step4obj = {
+				'Generate control code': function() {}
 			}
-				step1.add( step1obj, 'Type of actuator', ['linear actuator', 'bending actuator'] )
-				step1.add( step1obj, 'Add a new actuator' )
-				step1.add( step1obj, 'Remove an actuator' )
-				step1.add( step1obj, 'Load mesh', 'Load mesh' )
-				step1.open()
-				
-				step2.add( step2obj, '+' )
-				const Button_f = step2.add( step2obj, 'finish' )
-				const Button1 = step2.add( step2obj, 'Airchannel 1' )
-				const Button2 = step2.add( step2obj, 'Airchannel 2' )
-				Button.push(Button1)
-				Button.push(Button2)
-				step2.open()
 
-				let air = step3.add( step3obj, 'Choose an air channel', airchannel )
-				step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] )
-				step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 )
-				step3.add( step3obj, 'End time (s)', 1, 5, 0.1 )
-				step3.add( step3obj, 'Add to sequence motion' )
-				step3.add( step3obj, 'Preview motion' )
-				step3.add( step3obj, 'Add loop control' )
-				step3.add( step3obj, 'finish')
-				step3.open()
-				step3.show()
-				
-						
+			var controlType = null
+			var step1 = gui.addFolder( 'Step 1: Create a Shape' )
+			var step2 = gui.addFolder( 'Step 2: Group Actuators' )
+			step2.add( step2obj, 'Add new air channel' )
+			const button_f = step2.add( step2obj, 'Finish' )
+			const button1 = step2.add( step2obj, 'Airchannel 1' )
+			const button2 = step2.add( step2obj, 'Airchannel 2' )
+			buttons.push(button1)
+			buttons.push(button2)
+			step2.open()
+			var step3 = gui.addFolder( 'Step 3: Add Actuation & Preview Motion' )
+			const air = step3.add( step3obj, 'Choose an air channel', airChannels )
+			var step4 = gui.addFolder( 'Step 4: Assemble & Generate Control Code' )
+			step3.hide()
+			step4.hide()
+
+
+			
 			let INTERSECTED = 0
 			
 			initThree()
 			initCannon()
 			
-			connectTube()
+			initializeDefaultActuators()
 			animate()
-			
-			// deflateTube( deflationTubes )
-			// inflateTube( inflationConstraints )
 			
 			initGUI()
 
-			function inGroupmode(mode){//判断是否在分组模式
+			function inGroupmode(mode){//groupingmode
 				var flag = 0
 				for (var i in step2obj){
 						if(i==mode){
@@ -221,20 +227,41 @@
 				return flag
 			}
 
-			function color16(){//十六进制颜色随机
+			function color16(){//random colors
 				var color =Math.floor(Math.random()*16777215)
 				return color;
 			}
-
+			
 			function initGUI() {
 				/**
 				 * User interface & design workflow
-				*/				
+				*/
+				step1.add( step1obj, 'Type of actuator', ['linear actuator', 'bending actuator'] )
+				step1.add( step1obj, 'Add a new actuator' )
+				step1.add( step1obj, 'Remove an actuator' )
+				step1.add( step1obj, 'Rotate the bending direction by 90 degrees')
+				// step1.add( step1obj, 'Load mesh', 'Load mesh' )
+				step1.open()
+
 
 				
+				// Different channels will be displayed in different colors
+				
+				step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] )
+				step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 )
+				step3.add( step3obj, 'End time (s)', 1, 5, 0.1 )
+				step3.add( step3obj, 'Add to sequence motion' )
+				step3.add( step3obj, 'Preview motion' )
+				step3.add( step3obj, 'Add loop control' )
+				// step3.add( step3obj, 'finish')
+				step3.open()
+				step3.show()
+				
+				step4.add( step4obj, 'Generate control code' )
+				step4.open()
 			}
 			
-			// Mouse interactions
+			// User interactions
 			window.addEventListener( 'pointerdown', (event) => {
 				/**
 				 * Fired when a pointer becomes active state
@@ -243,109 +270,177 @@
 				*/
 				const mouse = new THREE.Vector2()
 				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
-        		mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
+				mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
 				
 				// Get the picking ray from the point
 				const raycaster = new THREE.Raycaster()
 				raycaster.setFromCamera( mouse, camera )
 				
-				// Loop the data lists to get which object is selected
-				const connectorNum = connectorMeshes.length
-				const tubeNum = tubeVisualList.length
+				let selectedConnectorIndex
+				let selectedTubeIndex
 				
-				// if ( type.type == 'add' ) {			
-				// 	for ( let i = 0; i<connectorNum; i++ ) {
-				// 		const hits = raycaster.intersectObject( connectorMeshes[i] )
-				// 		// Get the closest hit object
-				// 		if (hits.length > 0) {
-				// 			// const object = hits[0].object
-				// 			if(testObj.tube== "bending" ) {
-				// 				var tubeType = 1
-				// 				var connectorIndex = i
-				// 				var angleIndex = testObj.angle
-				// 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				// 				tubeVisualList.push( tube.tubeVisual )
-				// 				tubeBodiesList.push( tube.hingeBodies )
-				// 				deflationTubes.push( tube )
-				// 			}
-							
-				// 			if( testObj.tube== "normal" ) {
-				// 				var tubeType = 0
-				// 				var connectorIndex = i
-				// 				var angleIndex = testObj.angle
-				// 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				// 				tubeVisualList.push( tube.tubeVisual )
-				// 				tubeBodiesList.push( tube.hingeBodies )
-				// 				deflationTubes.push( tube )
-				// 			}
+				// Loop the data lists to get which object is selected by the user
+				for ( let i = 0; i < connectorMeshes.length; i++ ) {
+					const hits = raycaster.intersectObject( connectorMeshes[i] )
+					// Get the closest hit object
+					if ( hits.length > 0 ) {
+						// const object = hits[0].object
+						selectedConnectorIndex = i
+					}
+				}
+				
+				// Get selected tube by the user
+				for ( let i = 0; i < tubeInfoList.length; i++ ) {
+					const hits = raycaster.intersectObject( tubeInfoList[i].tubeVisual )
+					if ( hits.length > 0 ) {
+						selectedTubeIndex = i
+					}
+				}
+			
+				//add judge 
+				if (inGroupmode(controlType)){
+					
+					if(tubeInfoList[selectedTubeIndex]){
+						changeFlag = 1
+						var a = parseInt(controlType.substr(-1))-1
+						if(tubeInfoList[selectedTubeIndex].tubeVisual.name != controlType){
+							tubeInfoList[selectedTubeIndex].tubeVisual.name = controlType
+							// tubeInfoList[selectedTubeIndex].tubeVisual.children.forEach( (mesh) => {
+							// 	mesh.material.emissive.setHex(colors[a]);
+							// 	// console.log(object.children)
+							// })
+							// console.log(tubeInfoList[selectedTubeIndex].tubeVisual)
+						}
+						else if(tubeInfoList[selectedTubeIndex].tubeVisual.name == controlType){
+							tubeInfoList[selectedTubeIndex].tubeVisual.name=''
+							// tubeInfoList[selectedTubeIndex].tubeVisual.children.forEach( (mesh) => {
+							// 	mesh.material.emissive.setHex(0x0f0fff );
+							// 	// console.log(object.children)
+							// })
+							// console.log(tubeInfoList[selectedTubeIndex].tubeVisual.name)
+						}	
+					}
+					// console.log(tubeInfoList[selectedTubeIndex].tubeVisual.name)
+					
+				}
+				
+				// Divide mouse selections based on the variable controlType
+				if ( controlType == 'Add a new actuator' ) {
+					if(connectorMeshes[selectedConnectorIndex]){
+						addNewActuator( selectedConnectorIndex )
+					}
+					
+				}
+				
+				if ( controlType == 'Remove an actuator' ) {
+					if(tubeInfoList[selectedTubeIndex]){
+						removeActuator( selectedTubeIndex )
+					}	
+				}
 
-				// 		}
-				// 	}
-				// }
+				if ( controlType == 'Rotate the bending direction by 90 degrees' ) {
+					if(tubeInfoList[selectedTubeIndex]){
+						rotateBendingActuator( selectedTubeIndex )
+					}
+				}
+				// Clear the last selection
+				selectedConnectorIndex = undefined
+				selectedTubeIndex = undefined
+			})
+			
+			// User interface functions
+			function addNewActuator( selectedConnectorIndex ) {
+				if ( step1obj['Type of actuator'] == 'linear actuator' ) {
+					var tubeType = 0
+				} else if ( step1obj['Type of actuator'] == 'bending actuator' ) {
+					var tubeType = 1
+				}
 				
-				if ( controltype.type == 'edit' ) {
-					if( testObj2.type=="delete" ){
-						
-						for ( let i = 0; i<tubeNum; i++ ) {
-							const hits = raycaster.intersectObject( tubeVisualList[i] )
-							if (hits.length > 0) {
-								if(hits[ 0 ].object.name=="floor"){
-									hit.pop()
-								}
-							}
-							if (hits.length > 0) {
-								
-								if (hits[0].object.parent.type == "Group"){
-									console.log(hits[0].object.parent)
-									hits[0].object.parent.traverse(function(obj){		
-																	
-											if (obj.type === 'Mesh') {
-											obj.geometry.dispose();
-											obj.material.dispose();
-										}
-									})
-									scene.remove(hits[0].object.parent);
-									console.log(tubeVisualList)	
-									console.log(tubeBodiesList)
-									console.log(bodies)	
-									console.log(visuals)
-									//还需删除connector 这么通过tube索引connector 和 判定需要删除connnect的条件
-								}
+				if ( selectedConnectorIndex != undefined ) {
+					console.log("Add a " + step1obj['Type of actuator'])
+					
+					var angleIndex = 4
+					var tube = addMiuraTube( tubeType, selectedConnectorIndex, angleIndex )
+					tubeInfoList.push( tube )
+				} else {
+					// console.log('No connector is selected for adding new actuator')
+				}
+			}
+			
+			function removeActuator( selectedTubeIndex ) {
+				if ( selectedTubeIndex != undefined ) {
+					// Remove the physical cannon.js body
+					world.removeBody( tubeInfoList[ selectedTubeIndex ].hingeBodies )
+					world.removeConstraint( tubeInfoList[ selectedTubeIndex ].hingeConstraints )
+					
+					// Update the index of deflationActuators
+					const index = deflationActuators.indexOf( selectedTubeIndex )
+					if ( index > -1 ) {
+						deflationActuators.splice( index, 1 )
+						for ( let i = index; i < deflationActuators.length; i++ ) {
+							deflationActuators[index] = deflationActuators[index] - 1
+						}
+					} else {
+						for ( let i = 0; i < deflationActuators.length; i++ ) {
+							if ( deflationActuators[i] > selectedTubeIndex ) {
+								deflationActuators[i] = deflationActuators[i] - 1
 							}
 						}
 					}
-				}
-
-				//分组功能 通过改变tube.parent.name实现索引分组 //body未完成
-				if (inGroupmode(controltype.type)){
 					
-					for ( let i = 0; i<tubeNum; i++ ) {
-							const hits = raycaster.intersectObject( tubeVisualList[i] )
-							if (hits.length > 0) {
-								if(hits[ 0 ].object.name=="floor"){
-									hit.splice(0,hit.length)
-								}
+					// Remove the three.js object from the scene
+					scene.remove( tubeInfoList[ selectedTubeIndex ].tubeVisual )
+					
+					// Remove the item from the data array
+					tubeInfoList.splice( selectedTubeIndex, 1 )
+					
+					// Remove the end connector simultaneously
+					var inuse = false
+					for ( let i = 0; i < connectorMeshes.length; i++ ) {
+						const aabb = new THREE.Box3()
+						aabb.setFromObject( connectorMeshes[i] )
+						const center = new THREE.Vector3()
+						aabb.getCenter( center )
+						// Check if there is adjacent tube by distance
+						for ( let j = 0; j < tubeInfoList.length; j++ ) {
+							const aabbTube = new THREE.Box3()
+							aabbTube.setFromObject( tubeInfoList[j].tubeVisual )
+							const centerTube = new THREE.Vector3()
+							aabbTube.getCenter( centerTube )
+							
+							const dis = center.distanceTo( centerTube )
+							if ( Math.abs( dis - 93 ) < 1 ) {
+								inuse = true
 							}
-							if (hits.length > 0) {
-								if (hits[0].object.parent.type == "Group"){
-									if(hits[0].object.parent.name != controltype.type){
-										hits[0].object.parent.name = controltype.type
-										console.log(hits[0].object.parent)
-										break;
-									}
-									if(hits[0].object.parent.name == controltype.type){
-										hits[0].object.parent.name=''
-										console.log(hits[0].object.parent)
-										break;
-									}	
-								}
-							}							
+						}
+						// Remove the connector in three.js and cannon.js
+						if ( inuse == false ) {
+							scene.remove( connectorMeshes[i] )
+							connectorMeshes.splice( i, 1 )
+							world.removeBody( connectorBodies[i] )
+							connectorBodies.splice( i, 1 )
+						}
+						inuse = false
 					}
 				}
-				
-			})
+			}
 			
-			function connectTube() {
+			function rotateBendingActuator( selectedTubeIndex ) {
+				if ( selectedTubeIndex != undefined ) {
+					if ( tubeInfoList[ selectedTubeIndex ].tubeType == 1 ) {
+						console.log( '3334' )
+					}
+				}
+			}
+			
+			function previewMotion() {
+				// Preview motion based on the user defined actuation sequence
+				deflateActuators()
+				// inflateTube( inflationLinearActuators )
+			}
+			
+			// Basic functions
+			function initializeDefaultActuators() {
 				/**
 				 * Initialize a default connector in the physical world and visualize it in the scene
 				 * Get parameters from the user interface
@@ -358,46 +453,53 @@
 					connectorMeshes.push( mesh )
 				})
 				
-				var tubeType = 0
+				var tubeType = 1
 				var connectorIndex = 0
 				var angleIndex = 0
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeVisualList.push( tube.tubeVisual )
-				tubeBodiesList.push( tube.hingeBodies )
-				deflationTubes.push( tube )
+				tubeInfoList.push( tube )
 				
 				var tubeType = 0
 				var connectorIndex = 0
 				var angleIndex = 1
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeVisualList.push( tube.tubeVisual )
-				tubeBodiesList.push( tube.hingeBodies )
-				deflationTubes.push( tube )
+				tubeInfoList.push( tube )
 				
 				var tubeType = 0
 				var connectorIndex = 1
 				var angleIndex = 2
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeVisualList.push( tube.tubeVisual )
-				tubeBodiesList.push( tube.hingeBodies )
-				deflationTubes.push( tube )
-
+				tubeInfoList.push( tube )
+				
 				var tubeType = 0
-				var connectorIndex = 1
-				var angleIndex = 0
+				var connectorIndex = 0
+				var angleIndex = 4
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeVisualList.push( tube.tubeVisual )
-				tubeBodiesList.push( tube.hingeBodies )
-				deflationTubes.push( tube )
-
+				tubeInfoList.push( tube )
+				var index = 3
+				deflationActuators.push( index )
+				
+				var tubeType = 1
+				var connectorIndex = 1
+				var angleIndex = 4
+				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				tubeInfoList.push( tube )
+				var index = 4
+				deflationActuators.push( index )
+				
 				var tubeType = 0
 				var connectorIndex = 2
-				var angleIndex = 0
+				var angleIndex = 4
 				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeVisualList.push( tube.tubeVisual )
-				tubeBodiesList.push( tube.hingeBodies )
-				deflationTubes.push( tube )
-		
+				tubeInfoList.push( tube )
+
+				var tubeType = 0
+				var connectorIndex = 3
+				var angleIndex = 1
+				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				tubeInfoList.push( tube )
+				var index = 6
+				deflationActuators.push( index )
 			}
 			
 			function addMiuraTube( tubeType, connectorIndex, angleIndex ) {
@@ -420,6 +522,8 @@
 					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI/3*2 )
 				} else if ( angleIndex == 3 ) {
 					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI )
+				} else if ( angleIndex == 4 ) {
+					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 0, 1), Math.PI/2 )
 				}
 				
 				// Copy pivot connector position
@@ -448,9 +552,9 @@
 					const meshes = bodyToMesh( body )
 					meshes.forEach( (mesh) => { tubeVisual.add( mesh ) } )
 				})
-				scene.add(tubeVisual)
+				scene.add( tubeVisual )
 				
-				// Automatically add new connector body to the scene
+				// Automatically add new connector body to the scene when adding a new tube
 				const newConnector = attachConnector( connectorIndex, hingeBodies, unitVec )
 				if ( newConnector != undefined ) {
 					connectorBodies.push( newConnector )
@@ -460,7 +564,7 @@
 					})
 				}
 				
-				return {tubeVisual, hingeBodies, hingeConstraints}
+				return {tubeType, tubeVisual, hingeBodies, hingeConstraints}
 			}
 			
 			function initDefaultConnector() {
@@ -474,7 +578,7 @@
 					mass: 0.1,
 					type: CANNON.Body.DYNAMIC,
 					shape: sphereShape,
-					position: new CANNON.Vec3(0,0,0)
+					position: new CANNON.Vec3(0, -45, 0)
 				})
 				
 				// No collision needed
@@ -513,7 +617,7 @@
 				let flag = true
 				
 				// Check if there is a existing connector in the new position
-				for ( let i=0; i<connectorBodies.length; i++ ) {
+				for ( let i = 0; i < connectorBodies.length; i++ ) {
 					const vecEqual = newPos.almostEquals( connectorBodies[i].position )
 					if ( vecEqual == true ) {
 						flag = false
@@ -611,7 +715,7 @@
 				const unitNumber = 6	// a miura-ori tube has 6 units
 				const unitFacesNum = 8  // a unit has 8 quadrilaterals
 				let hingeBodiesArray = new Array( unitNumber * unitFacesNum )
-				const mass = 1
+				const mass = 0.1
 				
 				// Set the quaternion of the intervalVec
 				const intervalDistance = 12.954878 * 2
@@ -974,7 +1078,7 @@
 				const unitNumber = 6	// a miura-ori tube has 6 units
 				const unitFacesNum = 8  // a unit has 8 quadrilaterals
 				let hingeBodiesArray = new Array( unitNumber * unitFacesNum )
-				const mass = 1
+				const mass = 0.1
 				
 				// Set the quaternion of the intervalVec
 				const intervalDistance = 12.954878 * 2
@@ -1061,19 +1165,10 @@
 					world.addBody( hingeBodiesArray[ i*unitFacesNum+7 ] )
                 }
 				
-				// Assign different stiffness, relaxation to two groups of hinge constraints
-				const stiffness_1 = 1e6
-				const relaxation_1 = 0.5
-				const stiffness_2 = 1e10
-				const relaxation_2 = 0.8
-				const timeStep = 1/60
-				const initialHingeVelocity_1 = -Math.PI / 0.55
-				const initialHingeVelocity_2 = Math.PI / 0.3
-				
 				// Specify a list of hinge constraints
 				if (useHingeConstraints) {
 					for ( let i = 0; i < unitNumber; i++ ) {
-						const axis1 = new CANNON.Vec3( 0, 0.811574, 0.58425 ) // vally hinge
+						const axis1 = new CANNON.Vec3( 0, 0.811574, 0.58425 )
 						const hinge1 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum ], hingeBodiesArray[ i*unitFacesNum+1 ], {
 							pivotA: new CANNON.Vec3( 0, 0, 0 ),
 							axisA: axis1,	
@@ -1082,16 +1177,10 @@
 							collideConnected: true,
 							maxForce: Math.pow(10, 6)
 						})
-						
-						hinge1.equations.forEach( function( equation ) {
-							equation.setSpookParams( stiffness_2, relaxation_2, timeStep )
-						})
-						hinge1.enableMotor()
-						hinge1.setMotorSpeed( initialHingeVelocity_2 )
 						world.addConstraint( hinge1 )
 						constraints.push( hinge1 )
 						
-						const axis2 = new CANNON.Vec3( 0.707468, 0.706746, 0 ) // mountain hinge
+						const axis2 = new CANNON.Vec3( 0.707468, 0.706746, 0 )
 						const hinge2 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum ], hingeBodiesArray[ i*unitFacesNum+2 ], {
 							pivotA: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
 							axisA: axis2,
@@ -1100,16 +1189,10 @@
 							collideConnected: true,
 							maxForce: Math.pow(10, 6)
 						})
-						
-						hinge2.equations.forEach( function( equation ) {
-							equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
-						})
-						hinge2.enableMotor()
-						hinge2.setMotorSpeed( initialHingeVelocity_1 )
 						world.addConstraint( hinge2 )
 						constraints.push( hinge2 )
 						
-						const axis3 = new CANNON.Vec3( 0.707468, -0.706746, 0 )	// mountain hinge
+						const axis3 = new CANNON.Vec3( 0.707468, -0.706746, 0 )
 						const hinge3 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+1 ], hingeBodiesArray[ i*unitFacesNum+3 ], {
 							pivotA: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
 							axisA: axis3,
@@ -1118,16 +1201,10 @@
 							collideConnected: true,
 							maxForce: Math.pow(10, 6)
 						})
-						
-						hinge3.equations.forEach( function( equation ) {
-							equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
-						})
-						hinge3.enableMotor()
-						hinge3.setMotorSpeed( initialHingeVelocity_1 )
 						world.addConstraint( hinge3 )
 						constraints.push( hinge3 )
 						
-						const axis4 = new CANNON.Vec3( 0, -0.811574, 0.58425 )	// mountain hinge
+						const axis4 = new CANNON.Vec3( 0, -0.811574, 0.58425 )
 						const hinge4 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+2 ], hingeBodiesArray[ i*unitFacesNum+3 ], {
 								pivotA: new CANNON.Vec3( 0, 12.173610, 8.763745 ),
 								axisA: axis4,	
@@ -1136,16 +1213,10 @@
 								collideConnected: true,
 								maxForce: Math.pow(10, 6)
 						})
-						
-						hinge4.equations.forEach( function( equation ) {
-							equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
-						})
-						hinge4.enableMotor()
-						hinge4.setMotorSpeed( initialHingeVelocity_1 )
 						world.addConstraint( hinge4 )
 						constraints.push( hinge4 )
 						
-						const axis5 = new CANNON.Vec3( 0, -0.811574, 0.58425 ) // vally hinge
+						const axis5 = new CANNON.Vec3( 0, -0.811574, 0.58425 )
 						const hinge5 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+4 ], hingeBodiesArray[ i*unitFacesNum+5 ], {
 							pivotA: new CANNON.Vec3( 0, 0, 0 ),
 							axisA: axis5,	
@@ -1154,16 +1225,10 @@
 							collideConnected: true,
 							maxForce: Math.pow(10, 6)
 						})
-						
-						hinge5.equations.forEach( function( equation ) {
-							equation.setSpookParams( stiffness_2, relaxation_2, timeStep )
-						})
-						hinge5.enableMotor()
-						hinge5.setMotorSpeed( initialHingeVelocity_2 )
 						world.addConstraint( hinge5 )
 						constraints.push( hinge5 )
 						
-						const axis6 = new CANNON.Vec3( -0.707468, -0.706746, 0 ) // mountain hinge
+						const axis6 = new CANNON.Vec3( -0.707468, -0.706746, 0 )
 						const hinge6 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+4 ], hingeBodiesArray[ i*unitFacesNum+6 ], {
 							pivotA: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
 							axisA: axis6,
@@ -1172,16 +1237,10 @@
 							collideConnected: true,
 							maxForce: Math.pow(10, 6)
 						})
-						
-						hinge6.equations.forEach( function( equation ) {
-							equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
-						})
-						hinge6.enableMotor()
-						hinge6.setMotorSpeed( initialHingeVelocity_1 )
 						world.addConstraint( hinge6 )
 						constraints.push( hinge6 )
 						
-						const axis7 = new CANNON.Vec3( -0.707468, 0.706746, 0 )	// mountain hinge
+						const axis7 = new CANNON.Vec3( -0.707468, 0.706746, 0 )
 						const hinge7 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+5 ], hingeBodiesArray[ i*unitFacesNum+7 ], {
 							pivotA: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
 							axisA: axis7,
@@ -1190,16 +1249,10 @@
 							collideConnected: true,
 							maxForce: Math.pow(10, 6)
 						})
-						
-						hinge7.equations.forEach( function( equation ) {
-							equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
-						})
-						hinge7.enableMotor()
-						hinge7.setMotorSpeed( initialHingeVelocity_1 )
 						world.addConstraint( hinge7 )
 						constraints.push( hinge7 )
 						
-						const axis8 = new CANNON.Vec3( 0, 0.811574, 0.58425 )	// mountain hinge
+						const axis8 = new CANNON.Vec3( 0, 0.811574, 0.58425 )
 						const hinge8 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+6 ], hingeBodiesArray[ i*unitFacesNum+7 ], {
 							pivotA: new CANNON.Vec3( 0, 12.173610, -8.763745 ),
 							axisA: axis8,	
@@ -1208,16 +1261,10 @@
 							collideConnected: true,
 							maxForce: Math.pow(10, 6)
 						})
-						
-						hinge8.equations.forEach( function( equation ) {
-							equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
-						})
-						hinge8.enableMotor()
-						hinge8.setMotorSpeed( initialHingeVelocity_1 )
 						world.addConstraint( hinge8 )
 						constraints.push( hinge8 )
 						
-						const axis9 = new CANNON.Vec3( 0.707468, 0.706746, 0 ) // vally hinge
+						const axis9 = new CANNON.Vec3( 0.707468, 0.706746, 0 )
 						const hinge9 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum ], hingeBodiesArray[ i*unitFacesNum+4 ], {
 							pivotA: new CANNON.Vec3( 0, 0, 0 ),
 							axisA: axis9,
@@ -1226,16 +1273,10 @@
 							collideConnected: true,
 							maxForce: Math.pow(10, 6)
 						})
-						
-						hinge9.equations.forEach( function( equation ) {
-							equation.setSpookParams( stiffness_2, relaxation_2, timeStep )
-						})
-						hinge9.enableMotor()
-						hinge9.setMotorSpeed( initialHingeVelocity_2 )
 						world.addConstraint( hinge9 )
 						constraints.push( hinge9 )
 						
-						const axis10 = new CANNON.Vec3( 0.707468, -0.706746, 0 ) // vally hinge
+						const axis10 = new CANNON.Vec3( 0.707468, -0.706746, 0 )
 						const hinge10 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+1 ], hingeBodiesArray[ i*unitFacesNum+5 ], {
 							pivotA: new CANNON.Vec3( 0, 0, 0 ),
 							axisA: axis10,
@@ -1244,16 +1285,10 @@
 							collideConnected: true,
 							maxForce: Math.pow(10, 6)
 						})
-						
-						hinge10.equations.forEach( function( equation ) {
-							equation.setSpookParams( stiffness_2, relaxation_2, timeStep )
-						})
-						hinge10.enableMotor()
-						hinge10.setMotorSpeed( initialHingeVelocity_2 )
 						world.addConstraint( hinge10 )
 						constraints.push( hinge10 )
 						
-						const axis11 = new CANNON.Vec3( -0.707468, -0.706746, 0 ) // vally hinge
+						const axis11 = new CANNON.Vec3( -0.707468, -0.706746, 0 )
 						const hinge11 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+2 ], hingeBodiesArray[ i*unitFacesNum+6 ], {
 							pivotA: new CANNON.Vec3( 0, 24.347219, 0 ),
 							axisA: axis11,
@@ -1262,16 +1297,10 @@
 							collideConnected: true,
 							maxForce: Math.pow(10, 6)
 						})
-						
-						hinge11.equations.forEach( function( equation ) {
-							equation.setSpookParams( stiffness_2, relaxation_2, timeStep )
-						})
-						hinge11.enableMotor()
-						hinge11.setMotorSpeed( initialHingeVelocity_2 )
 						world.addConstraint( hinge11 )
 						constraints.push( hinge11 )
 						
-						const axis12 = new CANNON.Vec3( -0.707468, 0.706746, 0 ) // vally hinge
+						const axis12 = new CANNON.Vec3( -0.707468, 0.706746, 0 )
 						const hinge12 =	new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+3 ], hingeBodiesArray[ i*unitFacesNum+7 ], {
 							pivotA: new CANNON.Vec3( 0, 24.347219, 0 ),
 							axisA: axis12,
@@ -1280,18 +1309,12 @@
 							collideConnected: true,
 							maxForce: Math.pow(10, 6)
 						})
-						
-						hinge12.equations.forEach( function( equation ) {
-							equation.setSpookParams( stiffness_2, relaxation_2, timeStep )
-						})
-						hinge12.enableMotor()
-						hinge12.setMotorSpeed( initialHingeVelocity_2 )
 						world.addConstraint( hinge12 )
 						constraints.push( hinge12 )
 						
 						// Specify hinge constraints to connect multiple units
-						if ( i < unitNumber -1 ) {
-							const axis13 = new CANNON.Vec3( 0, -0.811574, -0.58425 )  // mountain hinge
+						if ( i < unitNumber - 1 ) {
+							const axis13 = new CANNON.Vec3( 0, -0.811574, -0.58425 )
 							const hinge13 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+1 ], hingeBodiesArray[ (i+1)*unitFacesNum ], {
 								pivotA: new CANNON.Vec3( 12.954878, -0.768048, 8.763745 ),
 								axisA: axis13,
@@ -1300,16 +1323,10 @@
 								collideConnected: true,
 								maxForce: Math.pow(10, 6)
 							})
-							
-							hinge13.equations.forEach(function( equation ) {
-								equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
-							})
-							hinge13.enableMotor()
-							hinge13.setMotorSpeed( initialHingeVelocity_1 )
 							world.addConstraint( hinge13 )
 							constraints.push( hinge13 )
 							
-							const axis14 = new CANNON.Vec3( 0, 0.811574, -0.58425 )  // vally hinge
+							const axis14 = new CANNON.Vec3( 0, 0.811574, -0.58425 )
 							const hinge14 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+3 ], hingeBodiesArray[ (i+1)*unitFacesNum+2 ], {
 								pivotA: new CANNON.Vec3( 12.954878, -0.768048, 8.763745 ),
 								axisA: axis14,
@@ -1318,16 +1335,10 @@
 								collideConnected: true,
 								maxForce: Math.pow(10, 6)
 							})
-							
-							hinge14.equations.forEach(function( equation ) {
-								equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
-							})
-							hinge14.enableMotor()
-							hinge14.setMotorSpeed( initialHingeVelocity_1 )
 							world.addConstraint( hinge14 )
 							constraints.push( hinge14 )
 							
-							const axis15 = new CANNON.Vec3( 0, 0.811574, -0.58425 )  // mountain hinge
+							const axis15 = new CANNON.Vec3( 0, 0.811574, -0.58425 )
 							const hinge15 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+5 ], hingeBodiesArray[ (i+1)*unitFacesNum+4 ], {
 								pivotA: new CANNON.Vec3( 12.954878, -0.768048, -8.763745 ),
 								axisA: axis15,
@@ -1336,15 +1347,10 @@
 								collideConnected: true,
 								maxForce: Math.pow(10, 6)
 							})
-							hinge15.equations.forEach( function( equation ) {
-								equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
-							})
-							hinge15.enableMotor()
-							hinge15.setMotorSpeed( initialHingeVelocity_1 )
 							world.addConstraint( hinge15 )
 							constraints.push( hinge15 )
 							
-							const axis16 = new CANNON.Vec3( 0, -0.811574, -0.58425 )  // vally hinge
+							const axis16 = new CANNON.Vec3( 0, -0.811574, -0.58425 )
 							const hinge16 = new CANNON.HingeConstraint(hingeBodiesArray[ i*unitFacesNum+7], hingeBodiesArray[ (i+1)*unitFacesNum+6 ], {
 								pivotA: new CANNON.Vec3( 12.954878, -0.768048, -8.763745 ),
 								axisA: axis16,
@@ -1353,11 +1359,6 @@
 								collideConnected: true,
 								maxForce: Math.pow(10, 6)
 							})
-							hinge16.equations.forEach( function( equation ) {
-								equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
-							})
-							hinge16.enableMotor()
-							hinge16.setMotorSpeed( initialHingeVelocity_1 )
 							world.addConstraint( hinge16 )
 							constraints.push( hinge16 )
 						}
@@ -1365,7 +1366,7 @@
 				}
 				return {hingeBodiesArray, constraints}
 			}
-
+			
 			function initFlatMiuraTube() {
 				/**
 				 * Note that this function folds the tube from a flat surface
@@ -1526,7 +1527,7 @@
 			
 			function initCannon() {
 				world = new CANNON.World()
-				world.solver.iterations = 50
+				world.solver.iterations = 20
 				world.quatNormalizeFast = true
 				
 				// Set the gravity vector
@@ -1559,10 +1560,9 @@
 				const basicMaterial = new THREE.MeshBasicMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
 				const phongMaterial = new THREE.MeshPhongMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
 				const normalMaterial = new THREE.MeshNormalMaterial( {side: THREE.DoubleSide, wireframe: false} )
-
-				const lambertMaterial = new THREE.MeshLambertMaterial( { color:  0xff5fff } )
+				const lambertMaterial = new THREE.MeshLambertMaterial( { color:  0x0f0fff,side: THREE.DoubleSide,  wireframe: false} )
 				const material = lambertMaterial
-				// const colors = new Float32Array()
+				// const color = new Float32Array()
 				
 				// Get the mesh of body
 				const meshes = body.shapes.map( (shape) => {
@@ -1642,7 +1642,7 @@
         		renderer.shadowMap.type = THREE.PCFSoftShadowMap
 				
 				// Camera
-				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 )
+				camera = new THREE.PerspectiveCamera( 80, window.innerWidth / window.innerHeight, 0.1, 1000 )
 				camera.position.set( 0, 500, 400 )
 
 				// Scene
@@ -1656,19 +1656,18 @@
 				directionalLight.target.position.set( 0, 0, 0 )
 				scene.add( directionalLight )
 				
-				// Floor
-				const floorGeometry = new THREE.PlaneGeometry( 5000, 5000, 100, 100 )
-				floorGeometry.rotateX( -Math.PI / 2 )
-				const floorMaterial = new THREE.MeshLambertMaterial( { color: 0x787878 } )
-				const floor = new THREE.Mesh( floorGeometry, floorMaterial )
-				floor.name = "floor"
-				floor.position.set( 0, -60, 0 )
-				floor.receiveShadow = true
+				// const floorGeometry = new THREE.PlaneGeometry( 5000, 5000, 100, 100 )
+				// floorGeometry.rotateX( -Math.PI / 2 )
+				// const floorMaterial = new THREE.MeshLambertMaterial( { color: 0x787878 } )
+				// const floor = new THREE.Mesh( floorGeometry, floorMaterial )
+				// floor.position.set( 0, -60, 0 )
+				// floor.receiveShadow = true
 				// scene.add(floor)
 				
-				const gridHelper = new THREE.GridHelper( 2000, 50 )
+				// Floor
+				const gridHelper = new THREE.GridHelper( 2500, 50 )
 				gridHelper.position.set( 0, -60, 0 )
-				gridHelper.name = "floor"
+				gridHelper.name = 'floor'
 				scene.add( gridHelper )
 				
 				// Orbit controls
@@ -1690,46 +1689,128 @@
 				world.fixedStep()
 				
 				// update the position and orientation of the mesh to match the CannonBody
-				for ( let i = 0; i < bodies.length; i++ ) {
-					const body = bodies[i]
-					const visual = visuals[i]
-					visual.position.copy( bodies[i].position )
-        			visual.quaternion.copy( bodies[i].quaternion )
+				// for ( let i = 0; i < bodies.length; i++ ) {
+				// 	const body = bodies[i]
+				// 	const visual = visuals[i]
+				// 	visual.position.copy( bodies[i].position )
+        		// 	visual.quaternion.copy( bodies[i].quaternion )
+				// }
+				for ( let i = 0; i < tubeInfoList.length; i++ ) {
+					for ( let j = 0; j < tubeInfoList[i].hingeBodies.length; j++ ) {
+						const body = tubeInfoList[i].hingeBodies[j]
+						const visual = tubeInfoList[i].tubeVisual.children[j]
+						visual.position.copy( body.position )
+						visual.quaternion.copy( body.quaternion )
+					}
+				}
+				
+				for ( let i = 0; i < connectorBodies.length; i++ ) {
+					const body = connectorBodies[i]
+					const visual = connectorMeshes[i]
+					visual.position.copy( body.position )
+					visual.quaternion.copy( body.quaternion )
 				}
 				
 				// Stop hinge bodies folding through each other while deflation
-				stopFacesFoldThrough( deflationTubes )
+				stopFacesFoldThrough()
 				
 				// Prevent the tube from becoming a flat surface while inflation
-				stopInflation()
+				// stopInflation()
 				
 				// Render three.js objects
 				controls.update()
 				renderer.render( scene, camera )
 			}
 			
-			function deflateTube( deflationTubes ) {
-				// Give velocity to hingeConstraints
-				const velocity = foldingVelocity
+			function deflateActuators() {
+				// parameters for linear actuator
+				const foldingVelocity = Math.PI / 2.0
+
+				// parameters for bending actuator
+				const hingeGroup1 = []
+				const hingeGroup2 = []
+				const unitNumber = 6
+				const unitHingeNum = 16
 				
-				for ( let i = 0; i < deflationTubes.length; i++ ) {
-					deflationTubes[i].hingeConstraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+				for ( let i = 0; i < unitNumber; i++ ) {
+					hingeGroup1.push( i*unitHingeNum+1, i*unitHingeNum+2, i*unitHingeNum+3, i*unitHingeNum+5, i*unitHingeNum+6, i*unitHingeNum+7 )
+					hingeGroup2.push( i*unitHingeNum+0, i*unitHingeNum+4, i*unitHingeNum+8, i*unitHingeNum+9, i*unitHingeNum+10, i*unitHingeNum+11 )
+					if ( i < unitNumber - 1 ) {
+						hingeGroup1.push( i*unitHingeNum+12, i*unitHingeNum+13, i*unitHingeNum+14, i*unitHingeNum+15 )
+					}
 				}
+
+				// Assign different stiffness, relaxation to two groups of hinge constraints
+				const stiffness_1 = 1e6
+				const relaxation_1 = 0.5
+				const stiffness_2 = 1e10
+				const relaxation_2 = 0.8
+				const timeStep = 1/60
+				const initialHingeVelocity_1 = -Math.PI / 0.55
+				const initialHingeVelocity_2 = Math.PI / 0.3
 				
-				// setTimeout(() => {
-				// 	const velocity = 0
-				// 	constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
-				// }, foldingDuration)
+				// Iterate the array of deflationActuators
+				for ( let i = 0; i < deflationActuators.length; i++ ) {
+					const index = deflationActuators[i]
+					
+					// if this is a linear actuator
+					if ( tubeInfoList[index].tubeType == 0 ) {
+						// Give velocity to hingeConstraints
+						tubeInfoList[index].hingeConstraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(foldingVelocity) )
+						
+						// setTimeout(() => {
+						// 	const velocity = 0
+						// 	constraints.forEach( hingeConstraint => hingeConstraint.setMotorSpeed(velocity) )
+						// }, foldingDuration)
+					} 
+					
+					// if this is a bending actuator
+					if ( tubeInfoList[index].tubeType == 1 ) {
+						// Give opposite velocity to hingeConstraints for bending behavior
+						tubeInfoList[index].hingeConstraints.forEach( (hingeConstraint, index) => {
+							if ( hingeGroup1.includes(index) ) {
+								hingeConstraint.equations.forEach( function( equation ) {
+									equation.setSpookParams( stiffness_1, relaxation_1, timeStep )
+								})
+								hingeConstraint.enableMotor()
+								hingeConstraint.setMotorSpeed( initialHingeVelocity_1 )
+							}
+							
+							if ( hingeGroup2.includes(index) ) {
+								hingeConstraint.equations.forEach( function( equation ) {
+									equation.setSpookParams( stiffness_2, relaxation_2, timeStep )
+								})
+								hingeConstraint.enableMotor()
+								hingeConstraint.setMotorSpeed( initialHingeVelocity_2 )
+							}
+						})
+					}
+				}
 			}
 			
-			function stopFacesFoldThrough( deflationTubes ) {
+			function stopFacesFoldThrough() {
 				// Stop hinge bodies folding through each other by setting minimum distance while deflation
-				for ( let i = 0; i < deflationTubes.length; i++ ) {
-					const refBody1 = deflationTubes[i].hingeBodies[17]
-					const refBody2 = deflationTubes[i].hingeBodies[25]
+				for ( let i = 0; i < deflationActuators.length; i++ ) {
+					const index = deflationActuators[i]
 					
-					if ( refBody1.position.distanceSquared( refBody2.position ) < disSquMin ) {
-						deflationTubes[i].hingeBodies.forEach( body => body.sleep() )
+					// if this is a linear actuator
+					if ( tubeInfoList[index].tubeType == 0 ) {
+						const refBody1 = tubeInfoList[index].hingeBodies[17]
+						const refBody2 = tubeInfoList[index].hingeBodies[25]
+						
+						if ( refBody1.position.distanceSquared( refBody2.position ) < disSquMinLinear ) {
+							tubeInfoList[index].hingeBodies.forEach( body => body.sleep() )
+						}
+					}
+					
+					// if this is a bending actuator
+					if ( tubeInfoList[index].tubeType == 1 ) {
+						const refBody1 = tubeInfoList[index].hingeBodies[17]
+						const refBody2 = tubeInfoList[index].hingeBodies[25]
+						
+						if ( refBody1.position.distanceSquared( refBody2.position ) < disSquMinBending ) {
+							tubeInfoList[index].hingeBodies.forEach( body => body.sleep() )
+						}
 					}
 				}
 			}
@@ -1746,7 +1827,7 @@
 			
 			function stopInflation( inflationConstraints ) {
 				// Prevent the tube from becoming a flat surface while inflation
-				if ( bodies[1].position.distanceSquared(bodies[9].position) >= disSquMax ) {
+				if ( bodies[1].position.distanceSquared(bodies[9].position) >= disSquMaxLinear ) {
 					const velocity = Math.PI / 1000
 					console.log("stopInflation")
 					console.log(velocity)
@@ -1765,27 +1846,28 @@
 			function render() {
 				//hlight 不同的airchannel
 
-				if (inGroupmode(controltype.type)){
-					var a = parseInt(controltype.type.substr(-1))-1
-					// console.log(color[a])
-					tubeVisualList.forEach((object)=>{
-						if(object.name == controltype.type){							
-							object.children.forEach( (mesh) => {
-								mesh.material.emissive.setHex(color[a]);
-								// console.log(object.children)
-							})
-						}
-						else{
-							object.children.forEach( (mesh) => {
-								mesh.material.emissive.setHex(0xff5fff );
-								// console.log(object.children)
-							})
-						}
-					})
-				}
+				// if (inGroupmode(controlType) && changeFlag==1){
+				// 	var a = parseInt(controlType.substr(-1))-1
+				// 	changeFlag = 0
+				// 	console.log(colors[a])
+				// 	tubeInfoList.forEach((object)=>{
+				// 		if(object.tubeVisual.name == controlType){							
+				// 			object.tubeVisual.children.forEach( (mesh) => {
+				// 				mesh.material.emissive.setHex(colors[a]);
+				// 				// console.log(object.children)
+				// 			})
+				// 		}
+				// 		else{
+				// 			object.tubeVisual.children.forEach( (mesh) => {
+				// 				mesh.material.emissive.setHex(0x0f0fff );
+				// 				// console.log(object.children)
+				// 			})
+				// 		}
+				// 	})
+				// }
 
+				//highlight
 
-				// 指针放上去highlight
 				const mouse = new THREE.Vector2()
 				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
         		mouse.y = -(( event.clientY / window.innerHeight ) * 2 - 1)
@@ -1795,61 +1877,103 @@
 				raycaster.setFromCamera( mouse, camera )
 				// console.log(INTERSECTED)
 				// 计算物体和射线的焦点
-				const intersects = raycaster.intersectObjects( scene.children );
-				// console.log(intersects.length)
-				if ( intersects.length > 0 ) {
-					if(intersects[ 0 ].object.name=="floor"){
-							intersects.splice(0,intersects.length)
-						}
+				// const intersects = raycaster.intersectObjects( scene.children );
+				let selectedConnectorIndex
+				let selectedTubeIndex
+				// Loop the data lists to get which object is selected by the user
+				for ( let i = 0; i < connectorMeshes.length; i++ ) {
+					const intersects = raycaster.intersectObject( connectorMeshes[i] )
+					// Get the closest hit object
+					if ( intersects.length > 0 ) {
+						// const object = hits[0].object
+						selectedConnectorIndex = i
+					}
 				}
-				if ( intersects.length > 0 ) {
-					if ( INTERSECTED != intersects[ 0 ].object ) {
-						// console.log(intersects[ 0 ].object)
+				// Get selected tube by the user
+				for ( let i = 0; i < tubeInfoList.length; i++ ) {
+					const intersects = raycaster.intersectObject( tubeInfoList[i].tubeVisual )
+					if ( intersects.length > 0 ) {
+						selectedTubeIndex = i
+					}
+				}
+				// console.log(intersects.length)
+				// if ( intersects.length > 0 ) {
+				// 	if(intersects[ 0 ].object.name=="floor"){
+				// 			intersects.splice(0,intersects.length)
+				// 		}
+				// }
 
-						if ( INTERSECTED ) {
-								if (INTERSECTED.parent.type =="Group"){
-									INTERSECTED.parent.children.forEach( (mesh) => {
-										mesh.material.emissive.setHex(INTERSECTED.currentHex );
-								})
-								}
-								else{
-									INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
-								}
-								
+				if ( controlType == 'Add a new actuator' ) {
+					// console.log(connectorMeshes[selectedConnectorIndex])
+					if(connectorMeshes[selectedConnectorIndex]){
+						if ( INTERSECTED != connectorMeshes[selectedConnectorIndex] ) {
+							if ( INTERSECTED ) {
+								INTERSECTED.material.emissive.setHex(INTERSECTED.currentHex);
 							}
-
-							INTERSECTED = intersects[ 0 ].object;
+							INTERSECTED = connectorMeshes[selectedConnectorIndex]
 							INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
-							if (INTERSECTED.parent.type =="Group"){
-								// console.log(INTERSECTED.parent.type)
-								INTERSECTED.parent.children.forEach( (mesh) => {
-									mesh.material.emissive.setHex( 0xff0000 );
-								})
-							}
-							else {
-								INTERSECTED.material.emissive.setHex( 0xff0000 );
-							}
+							INTERSECTED.material.emissive.setHex( 0xff0000 );
+						}
+						
 
 					}
-
-					} else {
-
+					else{
 						if ( INTERSECTED ){
-							
-							if (INTERSECTED.parent.type =="Group"){
-									
-									INTERSECTED.parent.children.forEach( (mesh) => {
-										mesh.material.emissive.setHex(INTERSECTED.currentHex );
-									})
+							INTERSECTED.material.emissive.setHex(INTERSECTED.currentHex);
+						} 
+						INTERSECTED = null;
+					}
+				}
+				if ( inGroupmode(controlType) || controlType == 'Remove an actuator' || controlType == 'Rotate the bending direction by 90 degrees') {
+					if(changeFlag){
+						tubeInfoList.forEach((object)=>{
+							if(object.tubeVisual.name == controlType){							
+								object.tubeVisual.children.forEach( (mesh) => {
+									mesh.material.emissive.setHex(colors[parseInt(controlType.substr(-1))-1]);
+									// console.log(object.children)
+								})
 							}
 							else{
-								INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+								object.tubeVisual.children.forEach( (mesh) => {
+									mesh.material.emissive.setHex(0x0f0fff );
+									// console.log(object.children)
+								})
 							}
-						
-						} 
+						})
+						changeFlag = 0
+					}
 
-						INTERSECTED = null;
+					if(tubeInfoList[selectedTubeIndex]){
+						if ( INTERSECTED != tubeInfoList[selectedTubeIndex].tubeVisual ) {
+						// console.log(intersects[ 0 ].object)
+							if ( INTERSECTED ) {
+									INTERSECTED.children.forEach( (mesh) => {
+										mesh.material.emissive.setHex(INTERSECTED.currentHex);
+									})
+							}
+							INTERSECTED = tubeInfoList[selectedTubeIndex].tubeVisual;
+							
+							if(INTERSECTED.name == controlType){							
+								INTERSECTED.currentHex = colors[parseInt(controlType.substr(-1))-1]
+							}				
+							else {
+								INTERSECTED.currentHex = INTERSECTED.children[0].material.emissive.getHex();
+							}
+							INTERSECTED.children.forEach( (mesh) => {
+								mesh.material.emissive.setHex(0xff0000);
+							})
+						}
 
+					} 
+					else {
+							if ( INTERSECTED ){
+								INTERSECTED.children.forEach( (mesh) => {
+										mesh.material.emissive.setHex(INTERSECTED.currentHex);
+								})
+							} 
+							INTERSECTED = null;
+							changeFlag = 1
+					}
 				}			
 				
 				// renderer.render( scene, camera );
