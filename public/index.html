@@ -52,12 +52,12 @@
 			
 			// Set hinge motor velocity that determines speed and direction
 			const initialHingeVelocity = 0
-			const foldingVelocity = Math.PI / 2.0
+			const foldingVelocity = Math.PI / 1.5
 			const foldingDuration = 1600
 			const unfoldingVelocity = - Math.PI / 4
 			const unFoldingDuration = 3000
-			const disSquMinLinear = 150
-			const disSquMinBending = 150
+			const disSquMinLinear = 120
+			const disSquMinBending = 120
 			const disSquMaxLinear = 720
 			
 			// Keep in sync the bodies with the visuals, they always have the same length
@@ -75,9 +75,13 @@
 			// GUI settings
 			const gui = new GUI()
 			var controlType = null
+
+			const axis = [new CANNON.Vec3(1, 0, 0), new CANNON.Vec3(0, 1, 0), new CANNON.Vec3(0, 0, 1)]
+			const angle = [0, 30*Math.PI/180, 45*Math.PI/180, 60*Math.PI/180, 75*Math.PI/180, 90*Math.PI/180, 120*Math.PI/180, 135*Math.PI/180, 150*Math.PI/180, 165*Math.PI/180, Math.PI]
 			
 			const step1obj = {
 				'Type of actuator': 'linear actuator',
+				'Basic shape': 'triangle',
 				'Add a new actuator': function() { controlType = 'Add a new actuator' },
 				'Remove an actuator': function() { controlType = 'Remove an actuator' },
 				'Rotate the bending direction by 90 degrees': function() { controlType = 'Rotate the bending direction by 90 degrees' },
@@ -120,7 +124,8 @@
 				 * User interface & design workflow
 				*/
 				var step1 = gui.addFolder( 'Step 1: Create a Shape' )
-				step1.add( step1obj, 'Type of actuator', ['linear actuator', 'bending actuator'] )
+				step1.add( step1obj, 'Type of actuator', [ 'linear actuator', 'bending actuator' ] )
+				step1.add( step1obj, 'Basic shape', [ 'trangle', 'rectangle', 'tetrahedron' ] )
 				step1.add( step1obj, 'Add a new actuator' )
 				step1.add( step1obj, 'Remove an actuator' )
 				step1.add( step1obj, 'Rotate the bending direction by 90 degrees')
@@ -136,8 +141,8 @@
 				
 				// Different channels will be displayed in different colors
 				var step3 = gui.addFolder( 'Step 3: Add Actuation & Preview Motion' )
-				step3.add( step3obj, 'Choose an air channel', ['Air channel 1', 'Air channel 2'] )
-				step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] )
+				step3.add( step3obj, 'Choose an air channel', [ 'Air channel 1', 'Air channel 2' ] )
+				step3.add( step3obj, 'Actuation method', [ 'Deflation', 'Inflation' ] )
 				step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 )
 				step3.add( step3obj, 'End time (s)', 1, 5, 0.1 )
 				step3.add( step3obj, 'Add to sequence motion' )
@@ -215,8 +220,7 @@
 				if ( selectedConnectorIndex != undefined ) {
 					console.log("Add a " + step1obj['Type of actuator'])
 					
-					var angleIndex = 4
-					var tube = addMiuraTube( tubeType, selectedConnectorIndex, angleIndex )
+					var tube = addMiuraTube( tubeType, selectedConnectorIndex, axis[1], angle[0] )
 					tubeInfoList.push( tube )
 				} else {
 					// console.log('No connector is selected for adding new actuator')
@@ -230,11 +234,14 @@
 					world.removeConstraint( tubeInfoList[ selectedTubeIndex ].hingeConstraints )
 					
 					// Update the index of deflationActuators
+					console.log(deflationActuators)
 					const index = deflationActuators.indexOf( selectedTubeIndex )
 					if ( index > -1 ) {
 						deflationActuators.splice( index, 1 )
+						console.log(deflationActuators)
 						for ( let i = index; i < deflationActuators.length; i++ ) {
 							deflationActuators[index] = deflationActuators[index] - 1
+							console.log(deflationActuators[index])
 						}
 					} else {
 						for ( let i = 0; i < deflationActuators.length; i++ ) {
@@ -243,6 +250,7 @@
 							}
 						}
 					}
+					console.log(deflationActuators)
 					
 					// Remove the three.js object from the scene
 					scene.remove( tubeInfoList[ selectedTubeIndex ].tubeVisual )
@@ -250,7 +258,7 @@
 					// Remove the item from the data array
 					tubeInfoList.splice( selectedTubeIndex, 1 )
 					
-					// Remove the end connector simultaneously
+					// Remove the not used connector simultaneously
 					var inuse = false
 					for ( let i = 0; i < connectorMeshes.length; i++ ) {
 						const aabb = new THREE.Box3()
@@ -284,7 +292,8 @@
 			function rotateBendingActuator( selectedTubeIndex ) {
 				if ( selectedTubeIndex != undefined ) {
 					if ( tubeInfoList[ selectedTubeIndex ].tubeType == 1 ) {
-						console.log( '3334' )
+						console.log( 'Rotate the bending direction by 90 degrees' )
+						// Need the unitVec of the tube for rotation
 					}
 				}
 			}
@@ -301,6 +310,9 @@
 				 * Initialize a default connector in the physical world and visualize it in the scene
 				 * Get parameters from the user interface
 				 * Let users manipulate tubes in the scene by selecting the connector and pre-defined angles
+				 * TubeType is 0 => linear actuator, TubeType is 1 => bending actuator
+				 * Axis index: x=>(1,0,0), y=>(0,1,0), z(0,0,1)
+				 * Angle index: 0=0, 1=>30, 2=>45, 3=>60, 4=>75, 5=>90, 6=>120, 7=>135, 8=>150, 9=>165, 10=>180
 				*/
 				const defaultConnector = initDefaultConnector()
 				connectorBodies.push( defaultConnector )
@@ -311,77 +323,67 @@
 				
 				var tubeType = 1
 				var connectorIndex = 0
-				var angleIndex = 0
-				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				var tube = addMiuraTube( tubeType, connectorIndex, axis[1], angle[2] )
 				tubeInfoList.push( tube )
+				var index = 0
+				deflationActuators.push( index )
 				
-				var tubeType = 0
+				var tubeType = 1
 				var connectorIndex = 0
-				var angleIndex = 1
-				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				var tube = addMiuraTube( tubeType, connectorIndex, axis[1], -angle[2] )
 				tubeInfoList.push( tube )
+				var index = 1
+				deflationActuators.push( index )
 				
-				var tubeType = 0
-				var connectorIndex = 1
-				var angleIndex = 2
-				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeInfoList.push( tube )
-				
-				var tubeType = 0
+				var tubeType = 1
 				var connectorIndex = 0
-				var angleIndex = 4
-				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				var tube = addMiuraTube( tubeType, connectorIndex, axis[1], angle[7] )
+				tubeInfoList.push( tube )
+				var index = 2
+				deflationActuators.push( index )
+				
+				var tubeType = 1
+				var connectorIndex = 0
+				var tube = addMiuraTube( tubeType, connectorIndex, axis[1], -angle[7] )
 				tubeInfoList.push( tube )
 				var index = 3
 				deflationActuators.push( index )
 				
-				var tubeType = 1
-				var connectorIndex = 1
-				var angleIndex = 4
-				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeInfoList.push( tube )
-				var index = 4
-				deflationActuators.push( index )
+				// var tubeType = 1
+				// var connectorIndex = 1
+				// var angleIndex = 4
+				// var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				// tubeInfoList.push( tube )
+				// var index = 4
+				// deflationActuators.push( index )
 				
-				var tubeType = 0
-				var connectorIndex = 2
-				var angleIndex = 4
-				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeInfoList.push( tube )
+				// var tubeType = 0
+				// var connectorIndex = 2
+				// var angleIndex = 4
+				// var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				// tubeInfoList.push( tube )
 
-				var tubeType = 0
-				var connectorIndex = 3
-				var angleIndex = 1
-				var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				tubeInfoList.push( tube )
-				var index = 6
-				deflationActuators.push( index )
+				// var tubeType = 0
+				// var connectorIndex = 3
+				// var angleIndex = 1
+				// var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
+				// tubeInfoList.push( tube )
+				// var index = 6
+				// deflationActuators.push( index )
 			}
 			
-			function addMiuraTube( tubeType, connectorIndex, angleIndex ) {
+			function addMiuraTube( tubeType, connectorIndex, axis, angle ) {
 				/**
 				 * Initiate a new physical tube with customized position and quaternion
 				 * Treat a new miura-ori tube as a three.js group and render
 				 * Automatically add connector bodies to the tube
-				 * tubeType is 0 => straight miura-ori tube; tubeType is 1 => bending miura-ori tube
+				 * TubeType is 0 => linear miura-ori tube; TubeType is 1 => bending miura-ori tube
 				*/
 				
-				// Calculate position and quaternion according to the connectorIndex and angleIndex
+				// Calculate position and quaternion according to the connectorIndex, axis and angleIndex
 				const quaternion = new CANNON.Quaternion()
-				
-				if ( angleIndex == 0 ) {
-					// Pre-defined angles
-					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), 0 )
-				} else if ( angleIndex == 1 ) {
-					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI/3 )
-				} else if ( angleIndex == 2 ) {
-					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI/3*2 )
-				} else if ( angleIndex == 3 ) {
-					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 1, 0), Math.PI )
-				} else if ( angleIndex == 4 ) {
-					quaternion.setFromAxisAngle( new CANNON.Vec3(0, 0, 1), Math.PI/2 )
-				}
-				
+				quaternion.setFromAxisAngle( axis, angle )
+
 				// Copy pivot connector position
 				const position = new CANNON.Vec3().copy( connectorBodies[connectorIndex].position )
 				
@@ -1497,7 +1499,7 @@
         		renderer.shadowMap.type = THREE.PCFSoftShadowMap
 				
 				// Camera
-				camera = new THREE.PerspectiveCamera( 80, window.innerWidth / window.innerHeight, 0.1, 1000 )
+				camera = new THREE.PerspectiveCamera( 90, window.innerWidth / window.innerHeight, 0.1, 1000 )
 				camera.position.set( 0, 500, 400 )
 
 				// Scene
