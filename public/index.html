@@ -240,8 +240,7 @@
 						deflationActuators.splice( index, 1 )
 						console.log(deflationActuators)
 						for ( let i = index; i < deflationActuators.length; i++ ) {
-							deflationActuators[index] = deflationActuators[index] - 1
-							console.log(deflationActuators[index])
+							deflationActuators[i] = deflationActuators[i] - 1
 						}
 					} else {
 						for ( let i = 0; i < deflationActuators.length; i++ ) {
@@ -250,7 +249,6 @@
 							}
 						}
 					}
-					console.log(deflationActuators)
 					
 					// Remove the three.js object from the scene
 					scene.remove( tubeInfoList[ selectedTubeIndex ].tubeVisual )
@@ -349,27 +347,24 @@
 				var index = 3
 				deflationActuators.push( index )
 				
-				// var tubeType = 1
-				// var connectorIndex = 1
-				// var angleIndex = 4
-				// var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				// tubeInfoList.push( tube )
-				// var index = 4
-				// deflationActuators.push( index )
+				var tubeType = 0
+				var connectorIndex = 1
+				var tube = addMiuraTube( tubeType, connectorIndex, axis[2], angle[5] )
+				tubeInfoList.push( tube )
+				var index = 4
+				deflationActuators.push( index )
 				
-				// var tubeType = 0
-				// var connectorIndex = 2
-				// var angleIndex = 4
-				// var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				// tubeInfoList.push( tube )
-
-				// var tubeType = 0
-				// var connectorIndex = 3
-				// var angleIndex = 1
-				// var tube = addMiuraTube( tubeType, connectorIndex, angleIndex )
-				// tubeInfoList.push( tube )
-				// var index = 6
-				// deflationActuators.push( index )
+				var tubeType = 0
+				var connectorIndex = 2
+				var tube = addMiuraTube( tubeType, connectorIndex, axis[2], angle[5] )
+				tubeInfoList.push( tube )
+				
+				var tubeType = 0
+				var connectorIndex = 3
+				var tube = addMiuraTube( tubeType, connectorIndex, axis[2], angle[5] )
+				tubeInfoList.push( tube )
+				var index = 5
+				deflationActuators.push( index )
 			}
 			
 			function addMiuraTube( tubeType, connectorIndex, axis, angle ) {
