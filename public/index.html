@@ -76,6 +76,8 @@
 			// GUI settings
 			const gui = new GUI()
 			var controlType = null
+			let refBoxMesh
+			let last_deg_x, last_deg_y, last_deg_z
 
 			const axis = [new CANNON.Vec3(1, 0, 0), new CANNON.Vec3(0, 1, 0), new CANNON.Vec3(0, 0, 1)]
 			const angle = [0, 30*Math.PI/180, 45*Math.PI/180, 60*Math.PI/180, 75*Math.PI/180, 90*Math.PI/180, 120*Math.PI/180, 135*Math.PI/180, 150*Math.PI/180, 165*Math.PI/180, Math.PI]
@@ -198,10 +200,12 @@
 				}
 				
 				if ( controlType == 'Remove an actuator' ) {
+					transControl.detach()
 					removeActuator( selectedTubeIndex )
 				}
 				
 				if ( controlType == 'Rotate the bending direction by 90 degrees' ) {
+					transControl.detach()
 					rotateBendingActuator( selectedTubeIndex )
 				}
 				
@@ -212,21 +216,23 @@
 			
 			// User interface functions
 			function addNewActuator( selectedConnectorIndex ) {
-				if ( step1obj['Type of actuator'] == 'linear actuator' ) {
-					var tubeType = 0
-				} else if ( step1obj['Type of actuator'] == 'bending actuator' ) {
-					var tubeType = 1
-				}
-				
 				if ( selectedConnectorIndex != undefined ) {
+					if ( step1obj['Type of actuator'] == 'linear actuator' ) {
+						var tubeType = 0
+					} else if ( step1obj['Type of actuator'] == 'bending actuator' ) {
+						var tubeType = 1
+					}
 					console.log("Add a " + step1obj['Type of actuator'])
 					
 					// Transform the new added actuator
 					transControl.detach()
-					transControl.dispose()
 					transControl = new TransformControls( camera, renderer.domElement )
+					transControl.setSize( 0.5 )
 					transControl.attach( connectorMeshes[ selectedConnectorIndex ] )
 					scene.add( transControl )
+					
+					const actuatorNum = tubeInfoList.length
+					console.log(actuatorNum)
 					transControl.addEventListener( 'mouseDown', function() {
 						// Ensure that only one actuator is added based on selected connector and axis
 						if ( transControl.axis == 'X' ) {
@@ -239,10 +245,51 @@
 							var tube = addMiuraTube( tubeType, selectedConnectorIndex, axis[1], -angle[5] )
 							tubeInfoList.push( tube )
 						}
+						
+						if ( tubeInfoList.length - actuatorNum == 1 ) {
+							transControl.detach()
+							
+							transControl = new TransformControls( camera, renderer.domElement )
+							transControl.addEventListener( 'change', function() { renderer.render( scene, camera ) } )
+							transControl.addEventListener( 'dragging-changed', function ( event ) {
+								controls.enabled = ! event.value
+							} )
+							console.log(connectorMeshes[ selectedConnectorIndex ].position)
+							refBoxMesh.position.copy( connectorMeshes[ selectedConnectorIndex ].position )
+							scene.add( refBoxMesh )
+							// transControl.attach( tubeInfoList[ tubeInfoList.length - 1 ].tubeVisual )
+							// transControl.position.copy( connectorMeshes[ selectedConnectorIndex ].position )
+							transControl.attach( refBoxMesh )
+							transControl.setSize( 0.5 )
+							scene.add( transControl )
+							transControl.setMode( 'rotate' )
+							transControl.setRotationSnap( 15 * Math.PI / 180 ) // set the rotation snap to 15 deg
+						}
 					} )
 				} else {
 					// console.log('No connector is selected for adding new actuator')
 				}
+			}
+			
+			function adjustActuatorPosition( quaternion ) {
+				// if ( Math.abs(radians_x - 2*Math.PI) > 0.001 || Math.abs(radians_y - 2*Math.PI) > 0.001 || Math.abs(radians_z - 2*Math.PI) > 0.001 ) {
+				// 	tubeInfoList[ tubeInfoList.length - 1 ].tubeVisual.quaternion.copy(refBoxMesh.quaternion)
+				// }
+				
+				const tube = tubeInfoList[ tubeInfoList.length - 1 ].tubeVisual
+				
+				tube.parent.localToWorld(tube.position)
+				
+				const tubeCenter = new THREE.Vector3( tubeInfoList[ tubeInfoList.length - 1 ].position.x, tubeInfoList[ tubeInfoList.length - 1 ].position.y, tubeInfoList[ tubeInfoList.length - 1 ].position.z )
+				const unitVec = new THREE.Vector3( tubeInfoList[ tubeInfoList.length - 1 ].unitVec.x, tubeInfoList[ tubeInfoList.length - 1 ].unitVec.y, tubeInfoList[ tubeInfoList.length - 1 ].unitVec.z )
+				const pivot = tubeCenter.sub( unitVec )
+				console.log( pivot )
+				tube.position.sub( pivot )
+				// tube.quaternion.copy(refBoxMesh.quaternion)
+				tube.position.applyQuaternion(quaternion)
+				tube.position.add(pivot)
+				tube.parent.worldToLocal( tube.position )
+				tube.applyQuaternion(quaternion)
 			}
 			
 			function removeActuator( selectedTubeIndex ) {
@@ -421,6 +468,7 @@
 					const meshes = bodyToMesh( body )
 					meshes.forEach( (mesh) => { tubeVisual.add( mesh ) } )
 				})
+				
 				scene.add( tubeVisual )
 				
 				// Automatically add new connector body to the scene when adding a new tube
@@ -433,7 +481,7 @@
 					})
 				}
 				
-				return {tubeType, tubeVisual, hingeBodies, hingeConstraints}
+				return {tubeType, tubeVisual, hingeBodies, hingeConstraints, unitVec, position, quaternion}
 			}
 			
 			function initDefaultConnector() {
@@ -1424,7 +1472,7 @@
 				if ( !(body instanceof CANNON.Body) ) {
 					throw new Error('The argument passed to bodyToMesh() is not a body')
 				}
-
+				
 				// Materials
 				const basicMaterial = new THREE.MeshBasicMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
 				const phongMaterial = new THREE.MeshPhongMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
@@ -1554,10 +1602,38 @@
 				// transControl.addEventListener( 'dragging-changed', function ( event ) {
 				// 	controls.enabled = ! event.value;
 				// } )
+				
+				const refBox = new THREE.BoxGeometry(10, 10, 10)
+				const material = new THREE.MeshNormalMaterial( {side: THREE.DoubleSide, wireframe: false} )
+				refBoxMesh = new THREE.Mesh(refBox, material)
 			}
 			
 			function animate() {
 				requestAnimationFrame( animate )
+				
+				if ( controlType == 'Add a new actuator' && transControl.mode == 'rotate' ) {
+
+
+					const euler = new THREE.Euler()
+					const rotation = euler.setFromQuaternion( refBoxMesh.quaternion )
+					const radians_x = rotation.x > 0 ? rotation.x : (2 * Math.PI) + rotation.x
+					const deg_x = THREE.MathUtils.radToDeg(radians_x)
+					const radians_y = rotation.y > 0 ? rotation.y : (2 * Math.PI) + rotation.y
+					const deg_y = THREE.MathUtils.radToDeg(radians_y)
+					const radians_z = rotation.z > 0 ? rotation.z : (2 * Math.PI) + rotation.z
+					const deg_z = THREE.MathUtils.radToDeg(radians_z)
+					
+					console.log(deg_x)
+					console.log(deg_y)
+					console.log(deg_z)
+
+					if ( Math.abs(deg_x - last_deg_x) > 14 || Math.abs(deg_y - last_deg_y) > 14 || Math.abs(deg_z - last_deg_z) > 14) {
+						adjustActuatorPosition( refBoxMesh.quaternion )
+					}
+					last_deg_x = deg_x
+					last_deg_y = deg_y
+					last_deg_z = deg_z
+				}
 				
 				// Step the physical simulation forward
 				world.fixedStep()
