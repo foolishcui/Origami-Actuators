@@ -38,6 +38,7 @@
 	
 	<body>
 		<!-- <script src="../node_modules/three/build/three.min.js"></script> -->
+		<script src="https://cdn.bootcdn.net/ajax/libs/FileSaver.js/2.0.5/FileSaver.js"></script>
 		<script type="importmap">
 			{
 				"imports": {
@@ -188,6 +189,7 @@
 					e7 = step3.add( step3obj, 'Add loop control' ).listen().onChange()		
 					step3.open()
 					step3.show()
+					step4.show()
 				},
 				'Add new air channel' : function(){//空气分组
 					button_f.enable()
@@ -229,6 +231,7 @@
 
 					// colors.push(color16())
 					step3.hide()
+					step4.hide()
 					// console.log(airchannel)	
 				},
 			}
@@ -265,9 +268,11 @@
 				'Preview motion': false,
 				'Add loop control': false
 			}
-			
+			// var five = require("johnny-five");
 			const step4obj = {
-				'Generate control code': function() {}
+				'Generate control code': function() {
+					generateControlcode()
+				}
 			}
 			
 			let INTERSECTED = 0
@@ -303,12 +308,39 @@
 			animate()
 			
 			initGUI()
+			
+			function generateControlcode(){
+				var tmp1 = airChannels.length-1+''
+				var tmp3=maxEnd*1000+1000+''
+				var content ="#define NUM "+tmp1+'\nfloat maxEnd='+tmp3+';\n'+
+				'float startTimes[NUM];\nfloat endTimes[NUM];\nint methon[NUM];\nvoid (*zero)(void)=0;\nvoid setup() {\n  for(int i=2;i<=NUM*2+1;i++){\n    pinMode(i,OUTPUT);\n    digitalWrite(i,LOW);\n}\n'
+				let tmp4
+				let tmp,t1,t2
+				let t3 = 0+''
+				for(let i = 1 ; i<airChannels.length;i++){
+					tmp = i-1+''
+					t1 = startTimes[i]+''
+					t2 = endTimes[i]+''
+					if(actuationMethods[i]=='Inflation'){
+						t3=1+''
+					}
+					
+					tmp4 = 'startTimes['+tmp+']='+t1+';\nendTimes['+tmp+']='+t2+';\nmethon['+tmp+']='+t3+';\n'
+					content = content+tmp4
+				}
+				content = content + '}\nvoid loop(){\nif(millis()<=maxEnd){\nfor(int i = 0; i<NUM;i++){\nif(millis()<=startTimes[i]*1000+20&&millis()>=startTimes[i]*1000-20){\nif(methon[i]==0){\ndigitalWrite(i*2+2,HIGH);\ndigitalWrite(i*2+3,LOW);\n}\nif(methon[i]==1){\ndigitalWrite(i*2+2,LOW);\ndigitalWrite(i*2+3,HIGH);}\n    }\nif(millis()>=endTimes[i]*1000&&millis()<=maxEnd){\n digitalWrite(i*2+2,LOW);\ndigitalWrite(i*2+3,LOW);\n}\n}\n} \n if(millis()>=maxEnd){zero();}\n}'
+				// console.log(content)
+				var blob = new Blob([content], {
+             	   type: "text/plain;charset=utf-8"
+            	});
+            	saveAs(blob, "controlcode.txt");
+			}
 
-			function stopActuators(group){//stop motion not finished
-				
+			function stopActuators(group){//stop motion not finished				
 				console.log("stopActuators")
 				moved[group]=0
 			}
+
 			function motionActuators(group) {//start motion  which air channel to move
 			
 				// parameters for linear actuator
