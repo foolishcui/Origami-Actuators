@@ -334,6 +334,50 @@
              	   type: "text/plain;charset=utf-8"
             	});
             	saveAs(blob, "controlcode.txt");
+
+					// #define NUM 6
+					// float maxEnd=5000;
+					// float startTimes[NUM];
+					// float endTimes[NUM];
+					// int methon[NUM];
+					// void (*zero)(void)=0;
+					// void setup() {
+					//   // put your setup code here, to run once:
+					//   //设置时间
+					//   startTimes[0] = 0;
+					//   endTimes[0] = 1;
+					//   //运动方式 0 为收缩，1为伸展
+					//   methon[0] = 0;
+					//   //.....
+					//   //初始化引脚
+					//   //单数引脚high为吸气，双数引脚high为充气
+					//   for(int i=2;i<=NUM*2+1;i++)
+					//   {
+					//     pinMode(i,OUTPUT);
+					//     digitalWrite(i,LOW);
+					//   }
+					// }
+
+					// void loop() {
+					//   // put your main code here, to run repeatedly:
+					// if(millis()<=maxEnd){
+					// for(int i = 0; i<NUM;i++){
+					// if(millis()<=startTimes[i]*1000+20&&millis()>=startTimes[i]*1000-20){
+					// if(methon[i]==0){
+					// digitalWrite(i*2+2,HIGH);
+					// digitalWrite(i*2+3,LOW);
+					// }
+					// if(methon[i]==1){
+					// digitalWrite(i*2+2,LOW);
+					// digitalWrite(i*2+3,HIGH);}
+					//     }
+					// if(millis()>=endTimes[i]*1000&&millis()<=maxEnd){
+					//  digitalWrite(i*2+2,LOW);
+					// digitalWrite(i*2+3,LOW);
+					// }
+					// }
+					// }      if(millis()>=maxEnd){zero();}
+					// }
 			}
 
 			function stopActuators(group){//stop motion not finished				
