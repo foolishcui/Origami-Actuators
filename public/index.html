@@ -507,7 +507,7 @@
 						}
 					}
 					// Stop hinge bodies folding through each other while deflation
-					stopFacesFoldThrough()		
+					
 				}
 				
 				//restart clock
@@ -541,7 +541,7 @@
 					visual.quaternion.copy( body.quaternion )
 				}
 			
-				
+				stopFacesFoldThrough()		
 				
 				// Prevent the tube from becoming a flat surface while inflation
 				// stopInflation()
