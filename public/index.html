@@ -13,10 +13,10 @@
 				--width: 400px;
 			}
 			.control-inactive button {
-				color: #888;
+				color: #830a32;
 			}
 			.control-inactive1 button {
-				color: #4E978F;
+				color: #9a387b;
 			}
 			.control-inactive2 button {
 				color: #43CD80;
@@ -26,6 +26,12 @@
 			}
 			.control-inactive4 button {
 				color: #FFCD8D;
+			}
+			.control-inactive5 button {
+				color: #5938b6;
+			}
+			.control-inactive6 button {
+				color: #1c290f;
 			}
 			/* .control-inactive5 button {
 				color: #4E978F;
@@ -55,15 +61,6 @@
 			import { GUI } from 'three/addons/libs/lil-gui.module.min.js'
 			import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 			import { TransformControls } from 'three/addons/controls/TransformControls.js'
-			
-			/**
-			 * Todo List:
-			 * Step1: Reset folding ratio to 0.75 (CZT)
-			 * Change tube type
-			 * Add actuator one by one
-			 * Add basic primitive shape
-			 * Arduino communication (JX)
-			*/
 			
 			// Three.js variables for render
 			let renderer, camera, scene
@@ -95,25 +92,27 @@
 			let deflationActuators = []
 			let inflationActuators = []
 			
-			let airChannels = [] 
+			let airChannels = []
 			let initColor = 4539717
-			let colors = [5948868,5150607,4443520,15177119,16764301] //color
-			let buttons = [] 
-			let startTimes = [] //move start time 
-			let endTimes = [] //move end time
-			let actuationMethods = [] //kind of move
-			let changeFlag = 0 //highlight
-			let maxEnd = 1 //max time for loop
-			let moved = [] //move flag  
-
-			//	clock		
+			// color of different air channels, the first one is highlight color 
+			let colors = [8587826,10107003,4443520,15177119,16764301,5847222,1845519] //color
+			let buttons = []
+			
+			let startTimes = [] // motion start time 
+			let endTimes = [] // motion end time
+			let actuationMethods = [] // deflation or inflation
+			let changeFlag = 0 // highlight
+			let maxEnd = 1 // max time for a sequence
+			let moved = [] // move flag
+			 
+			// time clock for sequence motion
 			var count = 0
 			var timeCount
-
-			//init control varablies
-			airChannels.push("-----")
-			airChannels.push("Airchannel 1")
-			airChannels.push("Airchannel 2")
+			
+			// Initialize default varablies in step3
+			airChannels.push( "-----" )
+			airChannels.push( "Airchannel 1" )
+			airChannels.push( "Airchannel 2" )
 			actuationMethods.push('Deflation')
 			actuationMethods.push('Deflation')
 			actuationMethods.push('Deflation')
@@ -126,7 +125,7 @@
 			moved.push(0)
 			moved.push(0)
 			moved.push(0)
-
+			
 			// GUI settings
 			const gui = new GUI()
 			var controlType = null
@@ -134,7 +133,7 @@
 			let last_deg_x, last_deg_y, last_deg_z
 
 			const axis = [new CANNON.Vec3(1, 0, 0), new CANNON.Vec3(0, 1, 0), new CANNON.Vec3(0, 0, 1)]
-			const angle = [0, 30*Math.PI/180, 45*Math.PI/180, 60*Math.PI/180, 75*Math.PI/180, 90*Math.PI/180, 120*Math.PI/180, 135*Math.PI/180, 150*Math.PI/180, 165*Math.PI/180, Math.PI]
+			const angle = [0, 30 * Math.PI / 180, 45 * Math.PI / 180, 60 * Math.PI / 180, 75 * Math.PI / 180, 90 * Math.PI / 180, 120 * Math.PI / 180, 135 * Math.PI / 180, 150 * Math.PI / 180, 165 * Math.PI / 180, Math.PI]
 			
 			const step1obj = {
 				'Type of actuator': 'linear actuator',
@@ -144,34 +143,34 @@
 				'Rotate the bending direction by 90 degrees': function() { controlType = 'Rotate the bending direction by 90 degrees' },
 				'Load mesh': function() { controlType = 'Load mesh' }
 			}
-						
+			
 			const step2obj = {
 				// 'Select actuators to create an air channel': function() {selectActuators()},
 				'Airchannel 1': function() {
 					controlType = "Airchannel 1"
 					changeFlag = 1
-					buttons.forEach((button,i)=>{
-						var num = i+1+''
-						button.domElement.classList.add( 'control-inactive'+num);
+					buttons.forEach( (button, i) => {
+						var num = i + 1 + ''
+						button.domElement.classList.add( 'control-inactive' + num)
 					})
-					buttons[0].domElement.classList.remove( 'control-inactive1' );
+					buttons[0].domElement.classList.remove( 'control-inactive1' )
 				},
 				'Airchannel 2': function() {
 					controlType = "Airchannel 2"
 					changeFlag = 1
-					buttons.forEach((button,i)=>{
-						var num = i+1+''
-						button.domElement.classList.add( 'control-inactive' +num);
+					buttons.forEach( (button,i) => {
+						var num = i + 1 + ''
+						button.domElement.classList.add( 'control-inactive' + num)
 					})
-					buttons[1].domElement.classList.remove( 'control-inactive2' );
+					buttons[1].domElement.classList.remove( 'control-inactive2' )
 				},
-				//按钮添加分组
-				'Finish' : function(){//完成分组按钮此时生成第三步界面
+				'Finish': function() {
+					// 完成分组按钮此时生成第三步界面
 					controlType = "step2finish"	
-					// button_f.disable()
-					buttons.forEach((button,i)=>{
-						var num = i+1+''
-						button.domElement.classList.add( 'control-inactive'+num );
+					
+					buttons.forEach( (button,i) => {
+						var num = i + 1+ ''
+						button.domElement.classList.add( 'control-inactive' + num )
 					})
 					e1.destroy()
 					e2.destroy()
@@ -179,7 +178,7 @@
 					e4.destroy()
 					e5.destroy()
 					e6.destroy()
-					e7.destroy()		
+					e7.destroy()
 					e1 = step3.add( step3obj, 'Choose an air channel', airChannels ).listen().onChange(showAirchannel)
 					e2 = step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] ).listen().onChange()
 					e3 = step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 ).listen()
@@ -191,7 +190,7 @@
 					step3.show()
 					step4.show()
 				},
-				'Add new air channel' : function(){//空气分组
+				'Add new air channel' : function() { // 空气分组
 					button_f.enable()
 					var num = 0
 					for (var i in airChannels){
@@ -211,7 +210,7 @@
 							buttons[num-1].domElement.classList.remove( 'control-inactive'+num );
 						}
 					
-					const button = step2.add( step2obj, "Airchannel "+ str )
+					const button = step2.add( step2obj, "Airchannel" + str )
 					buttons.push(button)
 					if(inGroupmode(controlType)){
 						var a = parseInt(controlType.substr(-1))-1
@@ -228,10 +227,9 @@
 					endTimes.push(1)
 					moved.push(0)
 
-
 					// colors.push(color16())
-					step3.hide()
-					step4.hide()
+					// step3.hide()
+					// step4.hide()
 					// console.log(airchannel)	
 				},
 			}
@@ -254,7 +252,7 @@
 							}
 						}
 						else{
-							alert("Time error")
+							alert( "Time error" )
 						}
 					}
 					else{
@@ -278,8 +276,15 @@
 			let INTERSECTED = 0
 
 			var step1 = gui.addFolder( 'Step 1: Create a Shape' )
-			var step2 = gui.addFolder( 'Step 2: Group Actuators' )
+			step1.add( step1obj, 'Type of actuator', [ 'linear actuator', 'bending actuator' ] )
+			step1.add( step1obj, 'Basic shape', [ 'trangle', 'rectangle', 'tetrahedron' ] )
+			step1.add( step1obj, 'Add a new actuator' )
+			step1.add( step1obj, 'Remove an actuator' )
+			step1.add( step1obj, 'Rotate the bending direction by 90 degrees')
+			// step1.add( step1obj, 'Load mesh', 'Load mesh' )
+			step1.open()
 			
+			var step2 = gui.addFolder( 'Step 2: Group Actuators' )
 			step2.add( step2obj, 'Add new air channel' )
 			const button_f = step2.add( step2obj, 'Finish' )
 			const button1 = step2.add( step2obj, 'Airchannel 1' )
@@ -289,18 +294,20 @@
 			step2.open()
 
 			var step3 = gui.addFolder( 'Step 3: Add Actuation & Preview Motion' )
-			let e1 = step3.add( step3obj, 'Choose an air channel', airChannels )
-			let e2 = step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] )
-			let e3 = step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 )
-			let e4 = step3.add( step3obj, 'End time (s)', 1, 5, 0.1 )
-			let e5 = step3.add( step3obj, 'Add to sequence motion' )
-			let e6 = step3.add( step3obj, 'Preview motion' )
-			let e7 = step3.add( step3obj, 'Add loop control' )		
-			var step4 = gui.addFolder( 'Step 4: Assemble & Generate Control Code' )
-			step3.hide()
-			step4.hide()
+			let e1 = step3.add( step3obj, 'Choose an air channel', airChannels ).listen().onChange(showAirchannel)
+			let	e2 = step3.add( step3obj, 'Actuation method', ['Deflation', 'Inflation'] ).listen().onChange()
+			let	e3 = step3.add( step3obj, 'Start time (s)', 0, 1, 0.1 ).listen()
+			let	e4 = step3.add( step3obj, 'End time (s)', 1, 5, 0.1 ).listen()
+			let	e5 = step3.add( step3obj, 'Add to sequence motion' )
+			let	e6 = step3.add( step3obj, 'Preview motion' ).listen().onChange( previewMotion )
+			let	e7 = step3.add( step3obj, 'Add loop control' ).listen().onChange()		
+			// step3.hide()
 			
-
+			var step4 = gui.addFolder( 'Step 4: Assemble & Generate Control Code' )
+			step4.add( step4obj, 'Generate control code' )
+			step4.open()
+			// step4.hide()
+			
 			initThree()
 			initCannon()
 			
@@ -309,86 +316,85 @@
 			
 			initGUI()
 			
-			function generateControlcode(){
-				var tmp1 = airChannels.length-1+''
-				var tmp3=maxEnd*1000+1000+''
-				var content ="#define NUM "+tmp1+'\nfloat maxEnd='+tmp3+';\n'+
-				'float startTimes[NUM];\nfloat endTimes[NUM];\nint methon[NUM];\nvoid (*zero)(void)=0;\nvoid setup() {\n  for(int i=2;i<=NUM*2+1;i++){\n    pinMode(i,OUTPUT);\n    digitalWrite(i,LOW);\n}\n'
+			function generateControlcode() {
+				var tmp1 = airChannels.length-1 + ''
+				var tmp3= maxEnd * 1000 + 1000 + ''
+				var content = "#define NUM  "+ tmp1 + '\nfloat maxEnd='+ tmp3 + ';\n' +
+				'float startTimes[NUM];\nfloat endTimes[NUM];\nvoid (*zero)(void)=0;\nvoid setup() {\n  for(int i=2;i<=NUM+2;i++){\n    pinMode(i,OUTPUT);\n    digitalWrite(i,LOW);\n}\n'
 				let tmp4
 				let tmp,t1,t2
-				let t3 = 0+''
-				for(let i = 1 ; i<airChannels.length;i++){
-					tmp = i-1+''
-					t1 = startTimes[i]+''
-					t2 = endTimes[i]+''
-					if(actuationMethods[i]=='Inflation'){
-						t3=1+''
-					}
-					
-					tmp4 = 'startTimes['+tmp+']='+t1+';\nendTimes['+tmp+']='+t2+';\nmethon['+tmp+']='+t3+';\n'
-					content = content+tmp4
+				
+				for(let i = 1 ; i < airChannels.length; i++) {
+					tmp = i - 1 + ''
+					t1 = startTimes[i] + ''
+					t2 = endTimes[i] + ''
+					tmp4 = 'startTimes['+tmp+']=' + t1 + ';\nendTimes[' + tmp + ']=' + t2 + ';\n'
+					content = content + tmp4
 				}
-				content = content + '}\nvoid loop(){\nif(millis()<=maxEnd){\nfor(int i = 0; i<NUM;i++){\nif(millis()<=startTimes[i]*1000+20&&millis()>=startTimes[i]*1000-20){\nif(methon[i]==0){\ndigitalWrite(i*2+2,HIGH);\ndigitalWrite(i*2+3,LOW);\n}\nif(methon[i]==1){\ndigitalWrite(i*2+2,LOW);\ndigitalWrite(i*2+3,HIGH);}\n    }\nif(millis()>=endTimes[i]*1000&&millis()<=maxEnd){\n digitalWrite(i*2+2,LOW);\ndigitalWrite(i*2+3,LOW);\n}\n}\n} \n if(millis()>=maxEnd){zero();}\n}'
+				
+				content = content + '}\nvoid loop(){\nif(millis()<=maxEnd){\nfor(int i = 0; i<NUM;i++){\nif(millis()<=startTimes[i]*1000+20&&millis()>=startTimes[i]*1000-20){\n\ndigitalWrite(i+2,HIGH);\n }\nif(millis()>=endTimes[i]*1000&&millis()<=maxEnd){\n digitalWrite(i+2,LOW);\n}\n}\n} \n if(millis()>=maxEnd){zero();}\n}'
 				// console.log(content)
 				var blob = new Blob([content], {
              	   type: "text/plain;charset=utf-8"
-            	});
-            	saveAs(blob, "controlcode.txt");
+            	})
+				
+            	saveAs( blob, "controlcode.txt" )
+				// #define NUM 6
+				// float maxEnd=5000;
+				// float startTimes[NUM];
+				// float endTimes[NUM];
+				// int methon[NUM];
+				// void (*zero)(void)=0;
+				// void setup() {
+				//   // put your setup code here, to run once:
+				//   //设置时间
+				//   startTimes[0] = 0;
+				//   endTimes[0] = 1;
+				//   //运动方式 0 为收缩，1为伸展
+				//   methon[0] = 0;
+				//   //.....
+				//   //初始化引脚
+				//   //单数引脚high为吸气，双数引脚high为充气
+				//   for(int i=2;i<=NUM*2+1;i++)
+				//   {
+				//     pinMode(i,OUTPUT);
+				//     digitalWrite(i,LOW);
+				//   }
+				// }
 
-					// #define NUM 6
-					// float maxEnd=5000;
-					// float startTimes[NUM];
-					// float endTimes[NUM];
-					// int methon[NUM];
-					// void (*zero)(void)=0;
-					// void setup() {
-					//   // put your setup code here, to run once:
-					//   //设置时间
-					//   startTimes[0] = 0;
-					//   endTimes[0] = 1;
-					//   //运动方式 0 为收缩，1为伸展
-					//   methon[0] = 0;
-					//   //.....
-					//   //初始化引脚
-					//   //单数引脚high为吸气，双数引脚high为充气
-					//   for(int i=2;i<=NUM*2+1;i++)
-					//   {
-					//     pinMode(i,OUTPUT);
-					//     digitalWrite(i,LOW);
-					//   }
-					// }
-
-					// void loop() {
-					//   // put your main code here, to run repeatedly:
-					// if(millis()<=maxEnd){
-					// for(int i = 0; i<NUM;i++){
-					// if(millis()<=startTimes[i]*1000+20&&millis()>=startTimes[i]*1000-20){
-					// if(methon[i]==0){
-					// digitalWrite(i*2+2,HIGH);
-					// digitalWrite(i*2+3,LOW);
-					// }
-					// if(methon[i]==1){
-					// digitalWrite(i*2+2,LOW);
-					// digitalWrite(i*2+3,HIGH);}
-					//     }
-					// if(millis()>=endTimes[i]*1000&&millis()<=maxEnd){
-					//  digitalWrite(i*2+2,LOW);
-					// digitalWrite(i*2+3,LOW);
-					// }
-					// }
-					// }      if(millis()>=maxEnd){zero();}
-					// }
+				// void loop() {
+				//   // put your main code here, to run repeatedly:
+				// if(millis()<=maxEnd){
+				// for(int i = 0; i<NUM;i++){
+				// if(millis()<=startTimes[i]*1000+20&&millis()>=startTimes[i]*1000-20){
+				// if(methon[i]==0){
+				// digitalWrite(i*2+2,HIGH);
+				// digitalWrite(i*2+3,LOW);
+				// }
+				// if(methon[i]==1){
+				// digitalWrite(i*2+2,LOW);
+				// digitalWrite(i*2+3,HIGH);}
+				//     }
+				// if(millis()>=endTimes[i]*1000&&millis()<=maxEnd){
+				//  digitalWrite(i*2+2,LOW);
+				// digitalWrite(i*2+3,LOW);
+				// }
+				// }
+				// }      if(millis()>=maxEnd){zero();}
+				// }
 			}
 
-			function stopActuators(group){//stop motion not finished				
-				console.log("stopActuators")
-				moved[group]=0
+			function stopActuators( group ) {
+				//stop motion not finished				
+				console.log( "Stop Actuators" )
+				moved[group] = 0
 			}
-
-			function motionActuators(group) {//start motion  which air channel to move
 			
+			function motionActuators(group) {
+				//start motion  which air channel to move
+				
 				// parameters for linear actuator
-				var tmp = group+''
+				var tmp = group + ''
 				var str = 'Airchannel '+ tmp
 				//air channel group
 				// console.log(str)
@@ -444,15 +450,13 @@
 					}
 				})
 				
-				moved[group] = 1 
+				moved[ group ] = 1 
 			}
 
 			function animate() {
 				requestAnimationFrame( animate )
 				
 				if ( controlType == 'Add a new actuator' && transControl.mode == 'rotate' ) {
-
-
 					const euler = new THREE.Euler()
 					const rotation = euler.setFromQuaternion( refBoxMesh.quaternion )
 					const radians_x = rotation.x > 0 ? rotation.x : (2 * Math.PI) + rotation.x
@@ -462,18 +466,17 @@
 					const radians_z = rotation.z > 0 ? rotation.z : (2 * Math.PI) + rotation.z
 					const deg_z = THREE.MathUtils.radToDeg(radians_z)
 					
-					console.log(deg_x)
-					console.log(deg_y)
-					console.log(deg_z)
-
+					// Adjust the actuator angle at least 15 degrees (rotation snap) is changed
 					if ( Math.abs(deg_x - last_deg_x) > 14 || Math.abs(deg_y - last_deg_y) > 14 || Math.abs(deg_z - last_deg_z) > 14) {
-						adjustActuatorPosition( refBoxMesh.quaternion )
+						adjustActuatorQuaternion( refBoxMesh.quaternion )
 					}
+					// Rocord the last angle to calculate changed degrees
 					last_deg_x = deg_x
 					last_deg_y = deg_y
 					last_deg_z = deg_z
 				}
-				//highlight
+				
+				// highlight
 				if(controlType == "step2finish"){
 					tubeInfoList.forEach((object)=>{
 						if(object.tubeVisual.name){
@@ -485,28 +488,28 @@
 						}
 					})
 				}
-
 				
-				if(controlType == 'Motion start'&&count<=maxEnd*100){
-								
+				if(controlType == 'Motion start' && count <= maxEnd * 100) {
 					for(let i = 1; i<=startTimes.length;i++){
 						//starting motion
 						//遍历startTime数组判断是否到了开始运动的时间
 						if(count==startTimes[i]*100){
 							if(moved[i]==0){
 								motionActuators(i)
-							}			
+							}
 						}
 						//遍历结束时间
-						if(count==endTimes[i]*100){
+						if(count == endTimes[i] * 100){
 							if(moved[i]==1){
 								stopActuators(i)
 							}
 							
 						}
-					}					
+					}
+					// Stop hinge bodies folding through each other while deflation
+					stopFacesFoldThrough()		
 				}
-
+				
 				//restart clock
 				if(step3obj["Add loop control"]==true&&count==maxEnd*100){
 						count=0
@@ -538,8 +541,7 @@
 					visual.quaternion.copy( body.quaternion )
 				}
 			
-				// Stop hinge bodies folding through each other while deflation
-				stopFacesFoldThrough()
+				
 				
 				// Prevent the tube from becoming a flat surface while inflation
 				// stopInflation()
@@ -549,40 +551,42 @@
 				renderer.render( scene, camera )
 			}
 
-			function timeIndicing(){//计时器 100毫秒加一次count
-				timeCount = setInterval(function(){
-					count++
-					
-				},100)
+			function timeIndicing() {
+				//计时器 100毫秒加一次count
+				timeCount = setInterval( function() {
+					count++	
+				}, 100)
 			}
-			function showAirchannel(value){//airchannel UI data updata
-				let tmp = value.substr(-1)
-				// console.log(tmp)
-				if(tmp-''>=0&&tmp-''<=9){
-					step3obj['Actuation method'] = actuationMethods[tmp]
-					step3obj['Start time (s)'] = startTimes[tmp]
-					step3obj['End time (s)'] = endTimes[tmp]
+			
+			function showAirchannel(value){ 
+				// Air channel UI data update
+				let tmp = value.substr( -1 )
+				
+				if ( tmp - '' >= 0 && tmp - '' <= 9) {
+					step3obj[ 'Actuation method' ] = actuationMethods[ tmp ]
+					step3obj[ 'Start time (s)' ] = startTimes[ tmp ]
+					step3obj[ 'End time (s)' ] = endTimes[ tmp ]
 				}		
 			}
-
+			
 			function previewMotion( value ) {
-				// Preview motion based on the user defined actuation sequence
+				// Preview motion based on the user defined actuation sequence and actuation type
 				// console.log(value)
-				//two motiontype
-				if(value==true){	
+				if( value == true ) {	
 					controlType = 'Motion start'
 					// inflationActuators()
-					timeIndicing()//开始计时
+					timeIndicing() // 开始计时
 				}
-				if(value==false){
-					controlType = 'Motion stop'					
-					clearInterval(timeCount)//重置计时器
+				if( value == false ) {
+					controlType = 'Motion stop'		
+					clearInterval( timeCount ) //重置计时器
 					count = 0
 				}
 				// inflateTube( inflationLinearActuators )
 			}
 
-			function inGroupmode(mode){//groupingmode
+			function inGroupmode(mode){
+				// groupingmode
 				var flag = 0
 				for (var i in step2obj){
 						if(i==mode){
@@ -593,20 +597,7 @@
 			}
 			
 			function initGUI() {
-				/**
-				 * User interface & design workflow
-				*/
-				
-				step1.add( step1obj, 'Type of actuator', [ 'linear actuator', 'bending actuator' ] )
-				step1.add( step1obj, 'Basic shape', [ 'trangle', 'rectangle', 'tetrahedron' ] )
-				step1.add( step1obj, 'Add a new actuator' )
-				step1.add( step1obj, 'Remove an actuator' )
-				step1.add( step1obj, 'Rotate the bending direction by 90 degrees')
-				// step1.add( step1obj, 'Load mesh', 'Load mesh' )
-				step1.open()
-				
-				step4.add( step4obj, 'Generate control code' )
-				step4.open()
+				// User interface & design workflow
 			}
 			
 			// User interactions
@@ -645,36 +636,36 @@
 					}
 				}
 
-				if (inGroupmode(controlType)){
-					
-					if(tubeInfoList[selectedTubeIndex]){
-						changeFlag = 1
-						// var a = parseInt(controlType.substr(-1))
-						if(tubeInfoList[selectedTubeIndex].tubeVisual.name != controlType){
-							tubeInfoList[selectedTubeIndex].tubeVisual.name = controlType
-						}
-						else if(tubeInfoList[selectedTubeIndex].tubeVisual.name == controlType){
-							tubeInfoList[selectedTubeIndex].tubeVisual.name=''
-						}	
-					}
-				}
-
 				// Divide mouse selections based on the variable controlType
 				if ( controlType == 'Add a new actuator' ) {
-					if(connectorMeshes[selectedConnectorIndex]){
+					if( connectorMeshes[selectedConnectorIndex] ){
 						addNewActuator( selectedConnectorIndex )
 					}
 				}
 				
 				if ( controlType == 'Remove an actuator' ) {
-					if(tubeInfoList[selectedTubeIndex]){
+					if( tubeInfoList[selectedTubeIndex] ){
 						removeActuator( selectedTubeIndex )
 					}	
 				}
 				
 				if ( controlType == 'Rotate the bending direction by 90 degrees' ) {
-					if(tubeInfoList[selectedTubeIndex]){
+					if( tubeInfoList[selectedTubeIndex] ){
 						rotateBendingActuator( selectedTubeIndex )
+					}
+				}
+				
+				if ( inGroupmode( controlType ) ){
+						
+					if ( tubeInfoList[ selectedTubeIndex ]){
+						changeFlag = 1
+						
+						if( tubeInfoList[selectedTubeIndex].tubeVisual.name != controlType){
+							tubeInfoList[selectedTubeIndex].tubeVisual.name = controlType
+						}
+						else if( tubeInfoList[selectedTubeIndex].tubeVisual.name == controlType){
+							tubeInfoList[selectedTubeIndex].tubeVisual.name = ''
+						}	
 					}
 				}
 				
@@ -740,25 +731,109 @@
 				}
 			}
 			
-			function adjustActuatorPosition( quaternion ) {
-				// if ( Math.abs(radians_x - 2*Math.PI) > 0.001 || Math.abs(radians_y - 2*Math.PI) > 0.001 || Math.abs(radians_z - 2*Math.PI) > 0.001 ) {
-				// 	tubeInfoList[ tubeInfoList.length - 1 ].tubeVisual.quaternion.copy(refBoxMesh.quaternion)
+			function adjustActuatorQuaternion( quaternion ) {
+				// Adjust the last added tube actuator
+				const actuator = tubeInfoList[ tubeInfoList.length - 1 ].tubeVisual
+				
+				// Create three.js vector to get the rotation pivot point
+				const actuatorCenter = new THREE.Vector3( tubeInfoList[ tubeInfoList.length - 1 ].position.x, tubeInfoList[ tubeInfoList.length - 1 ].position.y, tubeInfoList[ tubeInfoList.length - 1 ].position.z )
+				const unitVec = new THREE.Vector3( tubeInfoList[ tubeInfoList.length - 1 ].unitVec.x, tubeInfoList[ tubeInfoList.length - 1 ].unitVec.y, tubeInfoList[ tubeInfoList.length - 1 ].unitVec.z )
+				const pivot = actuatorCenter.sub( unitVec )
+				
+				// Rotate the actuator back to avoid the accumulation
+				actuator.parent.localToWorld( actuator.position )
+				
+				const inverseLastQua = actuator.quaternion.clone().invert()
+				actuator.position.sub( pivot )
+				actuator.position.applyQuaternion( inverseLastQua )
+				actuator.position.add( pivot )
+				actuator.parent.worldToLocal( actuator.position )
+				actuator.applyQuaternion( inverseLastQua )
+				
+				// Rotate the actuator based on the new quaternion
+				actuator.position.sub( pivot )
+				actuator.position.applyQuaternion( quaternion )
+				actuator.position.add( pivot )
+				actuator.parent.worldToLocal( actuator.position )
+				actuator.applyQuaternion( quaternion )
+
+				// Rotate the connector
+				// var inuse = false
+				// for ( let i = 0; i < connectorMeshes.length; i++ ) {
+				// 	const aabb = new THREE.Box3()
+				// 	aabb.setFromObject( connectorMeshes[i] )
+				// 	const center = new THREE.Vector3()
+				// 	aabb.getCenter( center )
+					
+				// 	// Find the connector that is not attached on tube by distance
+				// 	for ( let j = 0; j < tubeInfoList.length; j++ ) {
+				// 		const aabbTube = new THREE.Box3()
+				// 		aabbTube.setFromObject( tubeInfoList[j].tubeVisual )
+				// 		const centerTube = new THREE.Vector3()
+				// 		aabbTube.getCenter( centerTube )
+						
+				// 		const dis = center.distanceTo( centerTube )
+				// 		if ( Math.abs( dis - 93 ) < 1 ) {
+				// 			inuse = true
+				// 		}
+						
+				// 		if ( inuse == false ) {
+				// 			scene.remove( connectorMeshes[i] )
+				// 			connectorMeshes.splice( i, 1 )
+				// 			world.removeBody( connectorBodies[i] )
+				// 			connectorBodies.splice( i, 1 )
+				// 		}
+				// 		inuse = false
+				// 	}
 				// }
 				
-				const tube = tubeInfoList[ tubeInfoList.length - 1 ].tubeVisual
+				// Rotate the physical body of cannon.js
+				// world.removeBody( tubeInfoList[ tubeInfoList.length - 1 ].hingeBodies )
+				// world.removeConstraint( tubeInfoList[ tubeInfoList.length - 1 ].hingeConstraints )
 				
-				tube.parent.localToWorld(tube.position)
+				// const tubeType = tubeInfoList[ tubeInfoList.length - 1 ].tubeType
+				// const position = tubeInfoList[ tubeInfoList.length - 1 ].position
+				// const originQua = tubeInfoList[ tubeInfoList.length - 1 ].quaternion
 				
-				const tubeCenter = new THREE.Vector3( tubeInfoList[ tubeInfoList.length - 1 ].position.x, tubeInfoList[ tubeInfoList.length - 1 ].position.y, tubeInfoList[ tubeInfoList.length - 1 ].position.z )
-				const unitVec = new THREE.Vector3( tubeInfoList[ tubeInfoList.length - 1 ].unitVec.x, tubeInfoList[ tubeInfoList.length - 1 ].unitVec.y, tubeInfoList[ tubeInfoList.length - 1 ].unitVec.z )
-				const pivot = tubeCenter.sub( unitVec )
-				console.log( pivot )
-				tube.position.sub( pivot )
-				// tube.quaternion.copy(refBoxMesh.quaternion)
-				tube.position.applyQuaternion(quaternion)
-				tube.position.add(pivot)
-				tube.parent.worldToLocal( tube.position )
-				tube.applyQuaternion(quaternion)
+				// const newQua = new CANNON.Quaternion().copy( originQua )
+				// newQua.mult( inverseLastQua )
+				// newQua.mult( quaternion )
+				
+				// // Set the quaternion of the intervalVec
+				// const intervalDistance = 12.954878 * 2
+				// const intervalVec = new CANNON.Vec3( intervalDistance, 0, 0 )
+				// const intervalQuat = new CANNON.Quaternion().copy( newQua )	// Rotate the intervalVec
+				// intervalQuat.vmult( intervalVec, intervalVec )
+
+				// // tubeInfoList[ tubeInfoList.length - 1 ].hingeBodies.forEach( (body, i) => {
+				// // 	body.position.set( intervalVec.scale(i).vadd( position ) )
+				// // 	body.quaternion.set( intervalQuat )
+				// // } )
+				
+				// if ( tubeType == 0 ) {
+				// 	var tubeInfo = initDefaultMiuraTube( position, newQua )
+				// } else if ( tubeType == 1 ) {
+				// 	var tubeInfo = initBendingMiuraTube( position, newQua )
+				// }
+				// console.log( tubeInfoList[ tubeInfoList.length - 1 ].hingeBodies )
+				
+				// const tubeVisual444 = new THREE.Group()
+				// tubeInfo.hingeBodiesArray.forEach( (body, i) => {
+				// 	const meshes = bodyToMesh( body )
+				// 	meshes.forEach( (mesh) => { tubeVisual444.add( mesh ) } )
+				// } )
+				// scene.add( tubeVisual444 )
+
+				// tubeInfoList[ tubeInfoList.length - 1 ].hingeBodies = tubeInfo.hingeBodiesArray
+				// console.log( tubeInfoList[ tubeInfoList.length - 1 ].hingeBodies )
+				
+				// const tubeVisual333 = new THREE.Group()
+				// tubeInfo.hingeBodiesArray.forEach( (body, i) => {
+				// 	const meshes = bodyToMesh( body )
+				// 	meshes.forEach( (mesh) => { tubeVisual333.add( mesh ) } )
+				// } )
+				
+				// scene.add( tubeVisual333 )
 			}
 			
 			function removeActuator( selectedTubeIndex ) {
@@ -827,7 +902,7 @@
 					}
 				}
 			}
-						
+			
 			// Basic functions
 			function initializeDefaultActuators() {
 				/**
@@ -873,24 +948,24 @@
 				var index = 3
 				deflationActuators.push( index )
 				
-				var tubeType = 0
-				var connectorIndex = 1
-				var tube = addMiuraTube( tubeType, connectorIndex, axis[2], angle[5] )
-				tubeInfoList.push( tube )
-				var index = 4
-				deflationActuators.push( index )
+				// var tubeType = 0
+				// var connectorIndex = 1
+				// var tube = addMiuraTube( tubeType, connectorIndex, axis[2], angle[5] )
+				// tubeInfoList.push( tube )
+				// var index = 4
+				// deflationActuators.push( index )
 				
-				var tubeType = 0
-				var connectorIndex = 2
-				var tube = addMiuraTube( tubeType, connectorIndex, axis[2], angle[5] )
-				tubeInfoList.push( tube )
+				// var tubeType = 0
+				// var connectorIndex = 2
+				// var tube = addMiuraTube( tubeType, connectorIndex, axis[2], angle[5] )
+				// tubeInfoList.push( tube )
 				
-				var tubeType = 0
-				var connectorIndex = 3
-				var tube = addMiuraTube( tubeType, connectorIndex, axis[2], angle[5] )
-				tubeInfoList.push( tube )
-				var index = 5
-				deflationActuators.push( index )
+				// var tubeType = 0
+				// var connectorIndex = 3
+				// var tube = addMiuraTube( tubeType, connectorIndex, axis[2], angle[5] )
+				// tubeInfoList.push( tube )
+				// var index = 5
+				// deflationActuators.push( index )
 			}
 			
 			function addMiuraTube( tubeType, connectorIndex, axis, angle ) {
@@ -1940,7 +2015,7 @@
 				const basicMaterial = new THREE.MeshBasicMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
 				const phongMaterial = new THREE.MeshPhongMaterial( {color: 0x44aa88, side: THREE.DoubleSide, wireframe: false} )
 				const normalMaterial = new THREE.MeshNormalMaterial( {side: THREE.DoubleSide, wireframe: false} )
-				const lambertMaterial = new THREE.MeshLambertMaterial( { color: initColor ,side: THREE.DoubleSide,  wireframe: false} )
+				const lambertMaterial = new THREE.MeshLambertMaterial( { color: initColor, side: THREE.DoubleSide,  wireframe: false} )
 				const material = lambertMaterial
 				// const colors = new Float32Array()
 				
@@ -1995,7 +2070,7 @@
 					// console.log(mesh)
 					mesh.position.copy( body.shapeOffsets[i] )
 					mesh.quaternion.copy( body.shapeOrientations[i] )
-					mesh.material.emissive.setHex(initColor)
+					mesh.material.emissive.setHex( initColor )
 					// Enable shadows on every object
 					mesh.receiveShadow = true
     				mesh.castShadow = true
@@ -2024,7 +2099,7 @@
 				
 				// Camera
 				camera = new THREE.PerspectiveCamera( 90, window.innerWidth / window.innerHeight, 0.01, 1000 )
-				camera.position.set( 0, 500, 400 )
+				camera.position.set( 0, 500, 500 )
 				
 				// Scene
 				scene = new THREE.Scene()
@@ -2060,7 +2135,7 @@
 				controls.enablePan = true
 				controls.dampingFactor = 0.2
 				controls.minDistance = 10
-				controls.maxDistance = 500
+				controls.maxDistance = 600
 				
 				// Transformation controls
 				transControl = new TransformControls( camera, renderer.domElement )
