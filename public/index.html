@@ -210,7 +210,7 @@
 							buttons[num-1].domElement.classList.remove( 'control-inactive'+num );
 						}
 					
-					const button = step2.add( step2obj, "Airchannel" + str )
+					const button = step2.add( step2obj, "Airchannel "+ str )
 					buttons.push(button)
 					if(inGroupmode(controlType)){
 						var a = parseInt(controlType.substr(-1))-1
@@ -756,6 +756,8 @@
 				actuator.position.add( pivot )
 				actuator.parent.worldToLocal( actuator.position )
 				actuator.applyQuaternion( quaternion )
+
+
 
 				// Rotate the connector
 				// var inuse = false
