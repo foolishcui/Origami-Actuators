@@ -673,7 +673,13 @@
 					if(connectorMeshes[selectedConnectorIndex]){
 						adjustFlag = 0
 						// console.log(selectedConnectorIndex )
+
+						const tubeType = tubeInfoList[ tubeInfoList.length - 1 ].tubeType
+
+
+						
 						var newQua = new CANNON.Quaternion().copy( adjustQuaternion )
+
 						newQua =newQua.mult(quaternionTemp , newQua)
 						// newQua.mult( quaternionTemp)
 						// console.log(adjustQuaternion)
@@ -681,6 +687,7 @@
 						// newQua.mult( originQua )
 						// // newQua.mult( adjustQuaternion )
 						// console.log(originQua)
+						console.log(newQua)
 						// console.log(adjustQuaternion)
 						removeActuator( tubeInfoList.length - 1)
 						var tube = addMiuraTubefrompq(tubeType, selectedConnectorIndex, newQua)
@@ -815,8 +822,9 @@
 				actuator.position.add( pivot )
 				actuator.parent.worldToLocal( actuator.position )
 				actuator.applyQuaternion( quaternion )
+
 				adjustQuaternion =  actuator.quaternion
-				
+
 				var inuse = false
 				for ( let i = 0; i < connectorMeshes.length; i++ ) {
 						const aabb = new THREE.Box3()
