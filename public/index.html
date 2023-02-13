@@ -93,7 +93,7 @@
 			let inflationActuators = []
 			
 			let airChannels = []
-			let initColor = 4539717
+			let initColor = 9961471
 			// color of different air channels, the first one is highlight color 
 			let colors = [8587826,10107003,4443520,15177119,16764301,5847222,1845519] //color
 			let buttons = []
@@ -125,7 +125,11 @@
 			moved.push(0)
 			moved.push(0)
 			moved.push(0)
-			
+
+			//adjustflag
+			let adjustFlag=0
+			let adjustQuaternion,adjustPosition,adjustAxis
+			let quaternionTemp = new CANNON.Quaternion()
 			// GUI settings
 			const gui = new GUI()
 			var controlType = null
@@ -455,6 +459,12 @@
 
 			function animate() {
 				requestAnimationFrame( animate )
+				if(controlType == 'Add a new actuator'){
+					for( let i = 0; i < tubeInfoList.length; i++){
+						tubeInfoList[i].hingeBodies.forEach( body => body.sleep() )
+					}
+					
+				}
 				
 				if ( controlType == 'Add a new actuator' && transControl.mode == 'rotate' ) {
 					const euler = new THREE.Euler()
@@ -469,6 +479,7 @@
 					// Adjust the actuator angle at least 15 degrees (rotation snap) is changed
 					if ( Math.abs(deg_x - last_deg_x) > 14 || Math.abs(deg_y - last_deg_y) > 14 || Math.abs(deg_z - last_deg_z) > 14) {
 						adjustActuatorQuaternion( refBoxMesh.quaternion )
+						
 					}
 					// Rocord the last angle to calculate changed degrees
 					last_deg_x = deg_x
@@ -482,14 +493,16 @@
 						if(object.tubeVisual.name){
 							var a = parseInt(object.tubeVisual.name.substr(-1))
 							object.tubeVisual.children.forEach( (mesh) => {
-								mesh.material.emissive.setHex(colors[a]);
+								mesh.material.color.setHex(colors[a]);
 								// console.log(object.children)
 							})
 						}
 					})
 				}
 				
+
 				if(controlType == 'Motion start' && count <= maxEnd * 100) {
+					console.log(startTimes.length)
 					for(let i = 1; i<=startTimes.length;i++){
 						//starting motion
 						//遍历startTime数组判断是否到了开始运动的时间
@@ -507,14 +520,21 @@
 						}
 					}
 					// Stop hinge bodies folding through each other while deflation
+					if(step3obj["Add loop control"]==true&&count>maxEnd*100){
+						count=0
+					}
 					
 				}
-				
+
+				// if(controlType = 'Motion stop'){
+				// 	for(let i = 1; i<=startTimes.length;i++){
+				// 		console.log(startTimes[i])
+				// 	}
+				// }
+				// console.log(controlType)
 				//restart clock
-				if(step3obj["Add loop control"]==true&&count==maxEnd*100){
-						count=0
-				}
-			
+
+				
 				// Step the physical simulation forward
 				world.fixedStep()
 				
@@ -576,6 +596,9 @@
 					controlType = 'Motion start'
 					// inflationActuators()
 					timeIndicing() // 开始计时
+					for( let i = 0; i < tubeInfoList.length; i++){
+						tubeInfoList[i].hingeBodies.forEach( body => body.wakeUp() )
+					}
 				}
 				if( value == false ) {
 					controlType = 'Motion stop'		
@@ -618,6 +641,7 @@
 				let selectedConnectorIndex
 				let selectedTubeIndex
 				
+
 				// Loop the data lists to get which object is selected by the user
 				for ( let i = 0; i < connectorMeshes.length; i++ ) {
 					const hits = raycaster.intersectObject( connectorMeshes[i] )
@@ -625,6 +649,7 @@
 					if ( hits.length > 0 ) {
 						// const object = hits[0].object
 						selectedConnectorIndex = i
+						
 					}
 				}
 				
@@ -640,6 +665,35 @@
 				if ( controlType == 'Add a new actuator' ) {
 					if( connectorMeshes[selectedConnectorIndex] ){
 						addNewActuator( selectedConnectorIndex )
+					}
+				}
+
+				if (controlType == 'Add a new actuator' && adjustFlag==1){
+
+					if(connectorMeshes[selectedConnectorIndex]){
+						adjustFlag = 0
+						// console.log(selectedConnectorIndex )
+						const actuator = tubeInfoList[ tubeInfoList.length - 1 ].tubeVisual
+						const tubeType = tubeInfoList[ tubeInfoList.length - 1 ].tubeType
+						const position = tubeInfoList[ tubeInfoList.length - 1 ].position
+						const originQua = tubeInfoList[ tubeInfoList.length - 1 ].quaternion
+						
+						var newQua = new CANNON.Quaternion().copy( adjustQuaternion )
+						console.log(newQua)
+						console.log(quaternionTemp)
+						newQua =newQua.mult(quaternionTemp , newQua)
+						// newQua.mult( quaternionTemp)
+						// console.log(adjustQuaternion)
+						// console.log(newQua)
+						// newQua.mult( originQua )
+						// // newQua.mult( adjustQuaternion )
+						// console.log(originQua)
+						console.log(newQua)
+						// console.log(adjustQuaternion)
+						removeActuator( tubeInfoList.length - 1)
+						var tube = addMiuraTubefrompq(tubeType, selectedConnectorIndex, newQua)
+						tubeInfoList.push( tube )
+						// Create three.js vector to get the rotation pivot point
 					}
 				}
 				
@@ -668,7 +722,8 @@
 						}	
 					}
 				}
-				
+
+
 				// Clear the last selection
 				selectedConnectorIndex = undefined
 				selectedTubeIndex = undefined
@@ -676,6 +731,7 @@
 			
 			// User interface functions
 			function addNewActuator( selectedConnectorIndex ) {
+
 				if ( selectedConnectorIndex != undefined ) {
 					if ( step1obj['Type of actuator'] == 'linear actuator' ) {
 						var tubeType = 0
@@ -692,17 +748,22 @@
 					scene.add( transControl )
 					
 					const actuatorNum = tubeInfoList.length
-					console.log(actuatorNum)
+					// console.log(actuatorNum)
 					transControl.addEventListener( 'mouseDown', function() {
 						// Ensure that only one actuator is added based on selected connector and axis
 						if ( transControl.axis == 'X' ) {
 							var tube = addMiuraTube( tubeType, selectedConnectorIndex, axis[0], angle[0] )
+							quaternionTemp.setFromAxisAngle(axis[0], angle[0] )
 							tubeInfoList.push( tube )
-						} else if ( transControl.axis == 'Y' ) {
+						}
+						 else if ( transControl.axis == 'Y' ) {
 							var tube = addMiuraTube( tubeType, selectedConnectorIndex, axis[2], angle[5] )
+							
+							quaternionTemp.setFromAxisAngle(axis[2], angle[5] )
 							tubeInfoList.push( tube )
 						} else if ( transControl.axis == 'Z' ) {
 							var tube = addMiuraTube( tubeType, selectedConnectorIndex, axis[1], -angle[5] )
+							quaternionTemp.setFromAxisAngle(axis[1], -angle[5] )
 							tubeInfoList.push( tube )
 						}
 						
@@ -714,7 +775,7 @@
 							transControl.addEventListener( 'dragging-changed', function ( event ) {
 								controls.enabled = ! event.value
 							} )
-							console.log(connectorMeshes[ selectedConnectorIndex ].position)
+							// console.log(connectorMeshes[ selectedConnectorIndex ].position)
 							refBoxMesh.position.copy( connectorMeshes[ selectedConnectorIndex ].position )
 							scene.add( refBoxMesh )
 							// transControl.attach( tubeInfoList[ tubeInfoList.length - 1 ].tubeVisual )
@@ -733,6 +794,8 @@
 			
 			function adjustActuatorQuaternion( quaternion ) {
 				// Adjust the last added tube actuator
+				adjustFlag=1
+				// adjustQuaternion = quaternion
 				const actuator = tubeInfoList[ tubeInfoList.length - 1 ].tubeVisual
 				
 				// Create three.js vector to get the rotation pivot point
@@ -743,12 +806,16 @@
 				// Rotate the actuator back to avoid the accumulation
 				actuator.parent.localToWorld( actuator.position )
 				
-				const inverseLastQua = actuator.quaternion.clone().invert()
+				const inverseLastQua = actuator.quaternion.clone().invert ()
 				actuator.position.sub( pivot )
 				actuator.position.applyQuaternion( inverseLastQua )
 				actuator.position.add( pivot )
 				actuator.parent.worldToLocal( actuator.position )
 				actuator.applyQuaternion( inverseLastQua )
+				
+				// console.log(quaternion)				
+				// console.log(inverseLastQua)
+				
 				
 				// Rotate the actuator based on the new quaternion
 				actuator.position.sub( pivot )
@@ -757,7 +824,39 @@
 				actuator.parent.worldToLocal( actuator.position )
 				actuator.applyQuaternion( quaternion )
 
+				adjustQuaternion =  actuator.quaternion
 
+				console.log(quaternion)	
+				console.log(actuator.quaternion)	
+				
+				var inuse = false
+				for ( let i = 0; i < connectorMeshes.length; i++ ) {
+						const aabb = new THREE.Box3()
+						aabb.setFromObject( connectorMeshes[i] )
+						const center = new THREE.Vector3()
+						aabb.getCenter( center )
+						// Check if there is adjacent tube by distance
+						for ( let j = 0; j < tubeInfoList.length; j++ ) {
+							const aabbTube = new THREE.Box3()
+							aabbTube.setFromObject( tubeInfoList[j].tubeVisual )
+							const centerTube = new THREE.Vector3()
+							aabbTube.getCenter( centerTube )
+							
+							const dis = center.distanceTo( centerTube )
+							if ( Math.abs( dis - 93 ) < 1 ) {
+								inuse = true
+							}
+						}
+						// Remove the connector in three.js and cannon.js
+						if ( inuse == false ) {
+							scene.remove( connectorMeshes[i] )
+							connectorMeshes.splice( i, 1 )
+							world.removeBody( connectorBodies[i] )
+							connectorBodies.splice( i, 1 )
+						}
+						inuse = false
+				}
+	
 
 				// Rotate the connector
 				// var inuse = false
@@ -790,8 +889,9 @@
 				// }
 				
 				// Rotate the physical body of cannon.js
+
 				// world.removeBody( tubeInfoList[ tubeInfoList.length - 1 ].hingeBodies )
-				// world.removeConstraint( tubeInfoList[ tubeInfoList.length - 1 ].hingeConstraints )
+				// world.removeConstraint( tubeInfoList[ tubeInfoList.length - 1 ].hingeConstraints ) 
 				
 				// const tubeType = tubeInfoList[ tubeInfoList.length - 1 ].tubeType
 				// const position = tubeInfoList[ tubeInfoList.length - 1 ].position
@@ -801,16 +901,16 @@
 				// newQua.mult( inverseLastQua )
 				// newQua.mult( quaternion )
 				
-				// // Set the quaternion of the intervalVec
+				// Set the quaternion of the intervalVec
 				// const intervalDistance = 12.954878 * 2
 				// const intervalVec = new CANNON.Vec3( intervalDistance, 0, 0 )
 				// const intervalQuat = new CANNON.Quaternion().copy( newQua )	// Rotate the intervalVec
 				// intervalQuat.vmult( intervalVec, intervalVec )
 
-				// // tubeInfoList[ tubeInfoList.length - 1 ].hingeBodies.forEach( (body, i) => {
-				// // 	body.position.set( intervalVec.scale(i).vadd( position ) )
-				// // 	body.quaternion.set( intervalQuat )
-				// // } )
+				// tubeInfoList[ tubeInfoList.length - 1 ].hingeBodies.forEach( (body, i) => {
+				// 	body.position.set( intervalVec.scale(i).vadd( position ) )
+				// 	body.quaternion.set( intervalQuat )
+				// } )
 				
 				// if ( tubeType == 0 ) {
 				// 	var tubeInfo = initDefaultMiuraTube( position, newQua )
@@ -915,6 +1015,8 @@
 				 * Axis index: x=>(1,0,0), y=>(0,1,0), z(0,0,1)
 				 * Angle index: 0=0, 1=>30, 2=>45, 3=>60, 4=>75, 5=>90, 6=>120, 7=>135, 8=>150, 9=>165, 10=>180
 				*/
+
+
 				const defaultConnector = initDefaultConnector()
 				connectorBodies.push( defaultConnector )
 				bodyToMesh( defaultConnector ).forEach( (mesh) => {
@@ -1024,6 +1126,56 @@
 				return {tubeType, tubeVisual, hingeBodies, hingeConstraints, unitVec, position, quaternion}
 			}
 			
+			function addMiuraTubefrompq( tubeType, connectorIndex, quaternion ) {
+				/**
+				 * Initiate a new physical tube with customized position and quaternion
+				 * Treat a new miura-ori tube as a three.js group and render
+				 * Automatically add connector bodies to the tube
+				 * TubeType is 0 => linear miura-ori tube; TubeType is 1 => bending miura-ori tube
+				*/
+				
+				// Calculate position and quaternion according to the connectorIndex, axis and angleIndex
+				const position = new CANNON.Vec3().copy( connectorBodies[connectorIndex].position )
+				const intervalDistance = 12.954878  // half width of the Miura-ori tube unit
+				const sphereRadius = 15.0  // connector bounding sphere radius
+				const unitVec = new CANNON.Vec3( sphereRadius + intervalDistance, 0, 0 )
+				quaternion.vmult( unitVec, unitVec )
+
+				position.vadd( unitVec, position )
+				
+				// Render tube physical bodies to the view based on customized position and quaternion
+				if ( tubeType == 0 ) {
+					// straight miura-ori tube
+					var tubeInfo = initDefaultMiuraTube( position, quaternion )
+				} else if ( tubeType == 1 ) {
+					// bending miura-ori tube
+					var tubeInfo = initBendingMiuraTube( position, quaternion )
+				}
+				
+				const hingeBodies = tubeInfo.hingeBodiesArray
+				const hingeConstraints = tubeInfo.constraints
+				
+				const tubeVisual = new THREE.Group()
+				hingeBodies.forEach( (body, i) => {
+					const meshes = bodyToMesh( body )
+					meshes.forEach( (mesh) => { tubeVisual.add( mesh ) } )
+				})
+				
+				scene.add( tubeVisual )
+				
+				// Automatically add new connector body to the scene when adding a new tube
+				const newConnector = attachConnector( connectorIndex, hingeBodies, unitVec )
+				if ( newConnector != undefined ) {
+					connectorBodies.push( newConnector )
+					bodyToMesh( newConnector ).forEach( (mesh) => {
+						scene.add( mesh )
+						connectorMeshes.push( mesh )
+					})
+				}
+				
+				return {tubeType, tubeVisual, hingeBodies, hingeConstraints, unitVec, position, quaternion}
+			}
+
 			function initDefaultConnector() {
 				/**
 				 * Initialize a default connector in the physical world
@@ -2072,7 +2224,7 @@
 					// console.log(mesh)
 					mesh.position.copy( body.shapeOffsets[i] )
 					mesh.quaternion.copy( body.shapeOrientations[i] )
-					mesh.material.emissive.setHex( initColor )
+					mesh.material.color.setHex( initColor )
 					// Enable shadows on every object
 					mesh.receiveShadow = true
     				mesh.castShadow = true
@@ -2109,8 +2261,8 @@
 				
 				// Lights
 				scene.add( new THREE.AmbientLight( 0xFFFFFF, 0.1 ) )
-				const directionalLight = new THREE.DirectionalLight( 0xFFFFFF, 2 )
-				directionalLight.position.set( -30, 40, 30 )
+				const directionalLight = new THREE.DirectionalLight( 0xFFFFFF, 1 )
+				directionalLight.position.set( 0, 40, 30 )
 				directionalLight.target.position.set( 0, 0, 0 )
 				scene.add( directionalLight )
 				
@@ -2219,8 +2371,13 @@
 			
 			function stopFacesFoldThrough() {
 				// Stop hinge bodies folding through each other by setting minimum distance while deflation
-				for ( let i = 0; i < deflationActuators.length; i++ ) {
-					const index = deflationActuators[i]
+
+
+				// for(let i = 0; i < tubeInfoList.length; i++ )[
+				// 	deflationActuators[i]=i
+				// ]
+				for ( let i = 0; i < tubeInfoList.length; i++ ) {
+					const index = i
 					
 					// if this is a linear actuator
 					if ( tubeInfoList[index].tubeType == 0 ) {
@@ -2281,13 +2438,13 @@
 				// 	tubeInfoList.forEach((object)=>{
 				// 		if(object.tubeVisual.name == controlType){							
 				// 			object.tubeVisual.children.forEach( (mesh) => {
-				// 				mesh.material.emissive.setHex(colors[a]);
+				// 				mesh.material.color.setHex(colors[a]);
 				// 				// console.log(object.children)
 				// 			})
 				// 		}
 				// 		else{
 				// 			object.tubeVisual.children.forEach( (mesh) => {
-				// 				mesh.material.emissive.setHex(initColor );
+				// 				mesh.material.color.setHex(initColor );
 				// 				// console.log(object.children)
 				// 			})
 				// 		}
@@ -2336,18 +2493,18 @@
 					if(connectorMeshes[selectedConnectorIndex]){
 						if ( INTERSECTED != connectorMeshes[selectedConnectorIndex] ) {
 							if ( INTERSECTED ) {
-								INTERSECTED.material.emissive.setHex(INTERSECTED.currentHex);
+								INTERSECTED.material.color.setHex(INTERSECTED.currentHex);
 							}
 							INTERSECTED = connectorMeshes[selectedConnectorIndex]
-							INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
-							INTERSECTED.material.emissive.setHex( colors[0] );
+							INTERSECTED.currentHex = INTERSECTED.material.color.getHex();
+							INTERSECTED.material.color.setHex( colors[0] );
 						}
 						
 
 					}
 					else{
 						if ( INTERSECTED ){
-							INTERSECTED.material.emissive.setHex(INTERSECTED.currentHex);
+							INTERSECTED.material.color.setHex(INTERSECTED.currentHex);
 						} 
 						INTERSECTED = null;
 					}
@@ -2357,13 +2514,13 @@
 						tubeInfoList.forEach((object)=>{
 							if(object.tubeVisual.name == controlType){							
 								object.tubeVisual.children.forEach( (mesh) => {
-									mesh.material.emissive.setHex(colors[parseInt(controlType.substr(-1))]);
+									mesh.material.color.setHex(colors[parseInt(controlType.substr(-1))]);
 									// console.log(object.children)
 								})
 							}
 							else{
 								object.tubeVisual.children.forEach( (mesh) => {
-									mesh.material.emissive.setHex(initColor );
+									mesh.material.color.setHex(initColor );
 									// console.log(object.children)
 								})
 							}
@@ -2376,7 +2533,7 @@
 						// console.log(intersects[ 0 ].object)
 							if ( INTERSECTED ) {
 									INTERSECTED.children.forEach( (mesh) => {
-										mesh.material.emissive.setHex(INTERSECTED.currentHex);
+										mesh.material.color.setHex(INTERSECTED.currentHex);
 									})
 							}
 							INTERSECTED = tubeInfoList[selectedTubeIndex].tubeVisual;
@@ -2385,10 +2542,10 @@
 								INTERSECTED.currentHex = colors[parseInt(controlType.substr(-1))]
 							}				
 							else {
-								INTERSECTED.currentHex = INTERSECTED.children[0].material.emissive.getHex();
+								INTERSECTED.currentHex = INTERSECTED.children[0].material.color.getHex();
 							}
 							INTERSECTED.children.forEach( (mesh) => {
-								mesh.material.emissive.setHex(colors[0]);
+								mesh.material.color.setHex(colors[0]);
 							})
 						}
 
@@ -2396,7 +2553,7 @@
 					else {
 							if ( INTERSECTED ){
 								INTERSECTED.children.forEach( (mesh) => {
-										mesh.material.emissive.setHex(INTERSECTED.currentHex);
+										mesh.material.color.setHex(INTERSECTED.currentHex);
 								})
 							} 
 							INTERSECTED = null;
